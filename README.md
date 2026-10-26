@@ -2,6 +2,11 @@
 
 Final project by Group 5 for the Introduction to Computer Science course (CSE2025, G1) at Vietnamese-German University (VGU).
 
+## Members:
+Nguyen Trung Kien - 10425148
+Nguyen Khoa Lam - 10425102
+Tran Van Gia Khang - 10425146
+
 ## Motivation and goal
 
 Traffic signs communicate important rules, warnings, and directions. We are interested in finding which object-detection models work best on Vietnamese traffic signs, with the longer-term aim of applying a suitable model in a real-time system.
