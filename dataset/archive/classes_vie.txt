@@ -1,0 +1,52 @@
+Đường người đi bộ cắt ngang
+Đường giao nhau (ngã ba bên phải)
+Cấm đi ngược chiều
+Phải đi vòng sang bên phải
+Giao nhau với đường đồng cấp
+Giao nhau với đường không ưu tiên
+Chỗ ngoặt nguy hiểm vòng bên trái
+Cấm rẽ trái
+Bến xe buýt
+Nơi giao nhau chạy theo vòng xuyến
+Cấm dừng và đỗ xe
+Chỗ quay xe
+Biển gộp làn đường theo phương tiện
+Đi chậm
+Cấm xe tải
+Đường bị thu hẹp về phía phải
+Giới hạn chiều cao
+Cấm quay đầu
+Cấm ô tô khách và ô tô tải
+Cấm rẽ phải và quay đầu
+Cấm ô tô
+Đường bị thu hẹp về phía trái
+Gồ giảm tốc phía trước
+Cấm xe hai và ba bánh
+Kiểm tra
+Chỉ dành cho xe máy*
+Chướng ngoại vật phía trước
+Trẻ em
+Xe tải và xe công*
+Cấm mô tô và xe máy
+Chỉ dành cho xe tải*
+Đường có camera giám sát
+Cấm rẽ phải
+Nhiều chỗ ngoặt nguy hiểm liên tiếp, chỗ đầu tiên sang phải
+Cấm xe sơ-mi rơ-moóc
+Cấm rẽ trái và phải
+Cấm đi thẳng và rẽ phải
+Đường giao nhau (ngã ba bên trái)
+Giới hạn tốc độ (50km/h)
+Giới hạn tốc độ (60km/h)
+Giới hạn tốc độ (80km/h)
+Giới hạn tốc độ (40km/h)
+Các xe chỉ được rẽ trái
+Chiều cao tĩnh không thực tế
+Nguy hiểm khác
+Đường một chiều
+Cấm đỗ xe
+Cấm ô tô quay đầu xe (được rẽ trái)
+Giao nhau với đường sắt có rào chắn
+Cấm rẽ trái và quay đầu xe
+Chỗ ngoặt nguy hiểm vòng bên phải
+Chú ý chướng ngại vật – vòng tránh sang bên phải
