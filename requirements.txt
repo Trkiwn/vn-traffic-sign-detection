@@ -1,0 +1,16 @@
+# Python 3.11.17
+kagglehub==1.0.3
+Pillow==12.3.0
+datasets==5.1.0
+transformers==5.20.2
+accelerate==1.15.0
+timm==1.0.30
+trackio==0.43.0
+torchmetrics==1.9.0
+pycocotools==2.0.11
+ultralytics==8.4.189
+torch
+torchvision
+
+# For CUDA 13.2 wheels, install/upgrade PyTorch with:
+# pip3 install torch torchvision --index-url https://download.pytorch.org/whl/cu132
