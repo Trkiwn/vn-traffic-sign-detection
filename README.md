@@ -4,8 +4,11 @@ Final project by Group 5 for the Introduction to Computer Science course (CSE202
 
 ## Members:
 Nguyen Trung Kien - 10425148
+
 Nguyen Khoa Lam - 10425102
+
 Tran Van Gia Khang - 10425146
+
 
 ## Motivation and goal
 
