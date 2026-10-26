@@ -29,7 +29,7 @@ The prepared dataset includes:
 ## Current project status
 
 - Dataset download and preparation scripts are in place.
-- The planned model comparison includes YOLO11n, RT-DETR, and Faster R-CNN. The model, training, and prediction files exist under `DETR/scripts/models/`, but are currently empty; training and inference commands and model results are not yet available.
+- Hugging Face RT-DETR fine-tuning is configured in `DETR/scripts/models/train.py`. YOLO11n and Faster R-CNN training pipelines, inference scripts, and comparative results are not yet available.
 
 ## Setup
 
@@ -58,6 +58,22 @@ The first command downloads the Kaggle dataset into `dataset/`. The second valid
 
 Preprocessing stops rather than overwriting an existing `dataset/model_ready/` directory. Move or rename that directory before running preprocessing again.
 
+## Fine-tune RT-DETR
+
+After preparing the dataset and installing dependencies, run:
+
+```bash
+python DETR/scripts/models/train.py
+```
+
+The Hugging Face training pipeline reads the COCO JSON annotations, uses the validation split to select the best checkpoint by evaluation loss, and saves the selected model to `outputs/rtdetr_r50vd/`. To calculate COCO detection metrics on the held-out test split, run:
+
+```bash
+python DETR/scripts/evaluate/evaluation.py --split test
+```
+
+The evaluator reports COCO bbox mAP@[.50:.95], mAP@.50, mAP@.75, and average recall. Use `--split validation` while developing; reserve the test split for final reporting. Metrics and raw predictions are saved under `outputs/rtdetr_r50vd/evaluation/`. The evaluator also accepts `--checkpoint PATH` for a different fine-tuned checkpoint.
+
 ## Repository layout
 
 ```text
@@ -65,7 +81,8 @@ DETR/
   scripts/
     data/import_dataset.py       # Download and copy the Kaggle dataset
     preprocess/preprocessing.py  # Validate and prepare COCO and YOLO data
-    models/                      # Model, training, and prediction entry points
+    models/                      # RT-DETR model and training entry points
+    evaluate/evaluation.py       # COCO detection metrics for a fine-tuned checkpoint
 dataset/
   archive/                       # Downloaded source dataset
   model_ready/                   # Prepared images, annotations, labels, and data.yaml
