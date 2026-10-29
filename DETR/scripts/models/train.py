@@ -1,4 +1,5 @@
 import json
+import os
 from collections import defaultdict
 from pathlib import Path
 
@@ -8,7 +9,13 @@ from torch.utils.data import Dataset
 from transformers import RTDetrImageProcessor, Trainer, TrainingArguments
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[3]
+torch.backends.cudnn.enabled = True
+torch.backends.cuda.matmul.allow_tf32 = False
+torch.set_float32_matmul_precision("high")
+
+PROJECT_ROOT = Path(
+    os.environ.get("PROJECT_ROOT", str(Path(__file__).resolve().parents[3]))
+)
 MODEL_NAME = "PekingU/rtdetr_r50vd"
 DATASET_ROOT = PROJECT_ROOT / "dataset" / "model_ready"
 ANNOTATIONS_DIR = DATASET_ROOT / "annotations"
@@ -17,26 +24,39 @@ VALIDATION_ANNOTATIONS = ANNOTATIONS_DIR / "instances_validation.json"
 TEST_ANNOTATIONS = ANNOTATIONS_DIR / "instances_test.json"
 NUM_LABELS = 52
 IMAGE_SIZE = 640
+OUTPUT_DIR = Path(
+    os.environ.get(
+        "OUTPUT_DIR",
+        str(PROJECT_ROOT / "outputs" / "rtdetr_r50vd_comparison_50ep"),
+    )
+)
+RESUME_CHECKPOINT = os.environ.get("RESUME_CHECKPOINT")
+SEED = 42
 
 TRAINING_ARGUMENTS = TrainingArguments(
-    output_dir=str(PROJECT_ROOT / "outputs" / "rtdetr_r50vd"),
+    output_dir=str(OUTPUT_DIR),
     num_train_epochs=50,
     per_device_train_batch_size=2,
     per_device_eval_batch_size=2,
-    gradient_accumulation_steps=4,
+    gradient_accumulation_steps=2,
     learning_rate=5e-5,
     weight_decay=1e-4,
     warmup_steps=100,
     eval_strategy="epoch",
     save_strategy="epoch",
     save_total_limit=3,
-    load_best_model_at_end=False,
+    load_best_model_at_end=True,
     metric_for_best_model="eval_loss",
     greater_is_better=False,
-    dataloader_num_workers=4,
-    fp16=torch.cuda.is_available() and not torch.cuda.is_bf16_supported(),
-    bf16=torch.cuda.is_available() and torch.cuda.is_bf16_supported(),
+    dataloader_num_workers=2,
+    dataloader_pin_memory=True,
+    dataloader_persistent_workers=True,
+    fp16=True,
+    bf16=False,
     remove_unused_columns=False,
+    ddp_find_unused_parameters=False,
+    seed=SEED,
+    data_seed=SEED,
     report_to="none",
 )
 
@@ -187,29 +207,33 @@ def main() -> None:
         data_collator=collate_fn,
         processing_class=processor,
     )
-    trainer.train()
+    if RESUME_CHECKPOINT:
+        resume_checkpoint = Path(RESUME_CHECKPOINT)
+        if not resume_checkpoint.is_dir():
+            raise FileNotFoundError(
+                f"Requested resume checkpoint does not exist: {resume_checkpoint}"
+            )
+        trainer.train(resume_from_checkpoint=str(resume_checkpoint))
+    else:
+        trainer.train()
 
-    best_checkpoint = trainer.state.best_model_checkpoint
-    if best_checkpoint is None:
-        raise RuntimeError("Training finished without saving a best validation checkpoint.")
-
-    from transformers import RTDetrForObjectDetection
-
-    best_model = RTDetrForObjectDetection.from_pretrained(best_checkpoint)
-    best_model.save_pretrained(TRAINING_ARGUMENTS.output_dir)
+    final_model = trainer.model
+    trainer.save_model(TRAINING_ARGUMENTS.output_dir)
     processor.save_pretrained(TRAINING_ARGUMENTS.output_dir)
 
     test_arguments = TrainingArguments(
         output_dir=TRAINING_ARGUMENTS.output_dir,
         per_device_eval_batch_size=TRAINING_ARGUMENTS.per_device_eval_batch_size,
         dataloader_num_workers=TRAINING_ARGUMENTS.dataloader_num_workers,
+        dataloader_pin_memory=TRAINING_ARGUMENTS.dataloader_pin_memory,
+        dataloader_persistent_workers=TRAINING_ARGUMENTS.dataloader_persistent_workers,
         bf16=TRAINING_ARGUMENTS.bf16,
         fp16=TRAINING_ARGUMENTS.fp16,
         remove_unused_columns=False,
         report_to="none",
     )
     test_trainer = Trainer(
-        model=best_model,
+        model=final_model,
         args=test_arguments,
         data_collator=collate_fn,
         processing_class=processor,
