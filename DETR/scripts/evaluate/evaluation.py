@@ -1,5 +1,6 @@
 import argparse
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -11,11 +12,15 @@ from torch.utils.data import DataLoader, Dataset, Subset
 from transformers import RTDetrForObjectDetection, RTDetrImageProcessor
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[3]
+PROJECT_ROOT = Path(
+    os.environ.get("PROJECT_ROOT", str(Path(__file__).resolve().parents[3]))
+)
 DATASET_ROOT = PROJECT_ROOT / "dataset" / "model_ready"
-DEFAULT_CHECKPOINT = PROJECT_ROOT / "outputs" / "rtdetr_r50vd"
+DEFAULT_CHECKPOINT = (
+    PROJECT_ROOT / "outputs" / "rtdetr_r50vd_comparison_50ep"
+)
 DEFAULT_BATCH_SIZE = 2
-DEFAULT_NUM_WORKERS = 4
+DEFAULT_NUM_WORKERS = 2
 DEFAULT_SCORE_THRESHOLD = 0.001
 
 
@@ -113,6 +118,44 @@ def empty_coco_results(coco_ground_truth: COCO) -> COCO:
     return coco_results
 
 
+def select_checkpoint(model_path: Path) -> Path:
+    """Resolve a model directory or select the lowest validation-loss checkpoint."""
+    model_path = model_path.resolve()
+    if (model_path / "config.json").is_file():
+        return model_path
+    if not model_path.is_dir():
+        raise FileNotFoundError(f"Model directory not found: {model_path}")
+
+    candidates = sorted(model_path.glob("checkpoint-*/trainer_state.json"))
+    if not candidates:
+        raise FileNotFoundError(
+            f"No checkpoint directories found in {model_path}. "
+            "Pass a checkpoint directory containing config.json."
+        )
+
+    scored: list[tuple[float, Path]] = []
+    for state_path in candidates:
+        state = json.loads(state_path.read_text(encoding="utf-8"))
+        eval_losses = [
+            entry["eval_loss"]
+            for entry in state.get("log_history", [])
+            if isinstance(entry.get("eval_loss"), (int, float))
+        ]
+        if eval_losses:
+            scored.append((min(eval_losses), state_path.parent))
+
+    if not scored:
+        raise ValueError(
+            f"Checkpoint metadata in {model_path} contains no validation losses."
+        )
+    best_loss, best_checkpoint = min(scored, key=lambda item: item[0])
+    print(
+        f"Selected {best_checkpoint.name} from {model_path.name} "
+        f"(best validation loss: {best_loss:.6f})."
+    )
+    return best_checkpoint
+
+
 def evaluate(
     checkpoint: Path,
     split: str,
@@ -134,12 +177,6 @@ def evaluate(
     image_directory = DATASET_ROOT / "images" / split
     if not annotation_file.is_file():
         raise FileNotFoundError(f"COCO annotation file not found: {annotation_file}")
-    if not checkpoint.is_dir():
-        raise FileNotFoundError(
-            f"Model checkpoint directory not found: {checkpoint}. "
-            "Train the model first or pass a fine-tuned checkpoint with --checkpoint."
-        )
-
     processor = RTDetrImageProcessor.from_pretrained(checkpoint)
     model = RTDetrForObjectDetection.from_pretrained(checkpoint)
     coco_ground_truth = load_ground_truth(annotation_file)
@@ -279,7 +316,11 @@ def parse_args() -> argparse.Namespace:
         "--checkpoint",
         type=Path,
         default=DEFAULT_CHECKPOINT,
-        help="Fine-tuned model directory (default: outputs/rtdetr_r50vd).",
+        help=(
+            "Fine-tuned checkpoint directory or training output directory. "
+            "When an output directory is passed, the checkpoint with the lowest "
+            "recorded validation loss is selected automatically."
+        ),
     )
     parser.add_argument(
         "--split",
@@ -305,8 +346,9 @@ def parse_args() -> argparse.Namespace:
 
 if __name__ == "__main__":
     args = parse_args()
+    checkpoint = select_checkpoint(args.checkpoint)
     evaluate(
-        checkpoint=args.checkpoint.resolve(),
+        checkpoint=checkpoint,
         split=args.split,
         batch_size=args.batch_size,
         num_workers=args.num_workers,
