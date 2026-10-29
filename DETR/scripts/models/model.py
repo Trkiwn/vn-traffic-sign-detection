@@ -1,10 +1,13 @@
 import json
+import os
 from pathlib import Path
 
 from transformers import RTDetrConfig, RTDetrForObjectDetection
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[3]
+PROJECT_ROOT = Path(
+    os.environ.get("PROJECT_ROOT", str(Path(__file__).resolve().parents[3]))
+)
 ANNOTATIONS_PATH = (
     PROJECT_ROOT / "dataset" / "model_ready" / "annotations" / "instances_train.json"
 )
