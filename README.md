@@ -14,7 +14,7 @@ Tran Van Gia Khang - 10425146
 
 Traffic signs communicate important rules, warnings, and directions. We are interested in finding which object-detection models work best on Vietnamese traffic signs, with the longer-term aim of applying a suitable model in a real-time system.
 
-To compare detection performance, we plan to train YOLO11n, RT-DETR, and Faster R-CNN on the same dataset and evaluate them using the same metrics. This comparison will help us understand the trade-offs between detection quality and suitability for real-time use. The project is exploratory and is not intended for safety-critical or real-world driving use.
+To compare detection performance, we plan to train YOLO11s, RT-DETR, and Faster R-CNN on the same dataset and evaluate them using the same metrics. This comparison will help us understand the trade-offs between detection quality and suitability for real-time use. The project is exploratory and is not intended for safety-critical or real-world driving use.
 
 ## Dataset
 
@@ -30,7 +30,7 @@ The prepared dataset includes:
 
 - Dataset download and preparation scripts are in place.
 - Hugging Face RT-DETR fine-tuning and COCO evaluation are complete.
-- YOLO11n and Faster R-CNN training pipelines and comparative results are pending.
+- YOLO11s and Faster R-CNN training pipelines and comparative results are pending.
 
 ## Setup
 
@@ -120,7 +120,7 @@ For RT-DETR, the selected checkpoint was `checkpoint-4320`, chosen using the low
 |---|---|---:|---:|---:|---:|---:|---:|---:|
 | RT-DETR R50vd | Validation | 0.711 | 0.942 | 0.844 | 0.644 | 0.787 | 0.814 | 0.778 |
 | RT-DETR R50vd | Test | 0.757 | 0.973 | 0.917 | 0.695 | 0.801 | 0.891 | 0.816 |
-| YOLO11n | Test | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| YOLO11s | Test | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Faster R-CNN | Test | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 
 The RT-DETR test result indicates strong overall detection and localization. Its `mAP@.50` of 0.973 shows high precision at the standard IoU threshold, while `mAP@.75` of 0.917 indicates accurate box placement. `AR@100` of 0.816 indicates strong recall. Small signs are the most difficult group (`AP small` of 0.695), but performance remains substantially strong. The test results are higher than validation results, so these results show no evident overfitting; the test split may simply be easier. The test set must not be used to tune the models.
