@@ -1,50 +1,97 @@
 # Vietnamese Traffic Sign Detection
 
-Final project by Group 5 for the Introduction to Computer Science course (CSE2025, G1) at Vietnamese-German University (VGU).
+Final project by Group 5 for the Introduction to Computer Science course
+(CSE2025, G1) at Vietnamese-German University (VGU).
 
-## Members:
-Nguyen Trung Kien - 10425148
+## Members
 
-Nguyen Khoa Lam - 10425102
+- Nguyen Trung Kien - 10425148
+- Nguyen Khoa Lam - 10425102
+- Tran Van Gia Khang - 10425146
 
-Tran Van Gia Khang - 10425146
+## Project objective
 
+This project compares object-detection models on Vietnamese traffic-sign
+images. The completed pipelines currently cover RT-DETR and Faster R-CNN;
+YOLO11s is planned but has not yet been trained and evaluated in this
+repository.
 
-## Motivation and goal
+The comparison is designed to answer two questions:
 
-Traffic signs communicate important rules, warnings, and directions. We are interested in finding which object-detection models work best on Vietnamese traffic signs, with the longer-term aim of applying a suitable model in a real-time system.
+1. How accurately can each model locate and classify the annotated signs?
+2. What trade-offs exist between detection quality and eventual real-time use?
 
-To compare detection performance, we plan to train YOLO11n, RT-DETR, and Faster R-CNN on the same dataset and evaluate them using the same metrics. This comparison will help us understand the trade-offs between detection quality and suitability for real-time use. The project is exploratory and is not intended for safety-critical or real-world driving use.
+The second question cannot be answered from accuracy alone. Parameter count,
+model size, and latency or FPS still need to be measured under the same
+hardware and inference settings. This project is exploratory and is not
+intended for safety-critical or real-world driving use.
 
 ## Dataset
 
-The project uses the [Vietnamese Traffic Signs dataset on Kaggle](https://www.kaggle.com/datasets/maitam/vietnamese-traffic-signs). It contains 52 sign categories. The preprocessing pipeline creates a reproducible validation split from the training data while retaining the provided test split.
+The project uses the
+[Vietnamese Traffic Signs dataset on Kaggle](https://www.kaggle.com/datasets/maitam/vietnamese-traffic-signs).
+The prepared data contains 52 categories and COCO-format bounding-box
+annotations.
 
-The prepared dataset includes:
+The current prepared split statistics are:
 
-- Images divided into training, validation, and test splits.
-- COCO annotations in `dataset/model_ready/annotations/`.
-- YOLO-format labels in `dataset/model_ready/labels/` and a configuration file at `dataset/model_ready/data.yaml`.
+| Split | Images | Annotations | Categories |
+|---|---:|---:|---:|
+| Train | 2,297 | 5,638 | 52 |
+| Validation | 255 | 1,051 | 52 |
+| Test | 639 | 1,645 | 52 |
 
-## Current project status
+The preprocessing pipeline creates the validation split from the training
+data, while retaining the provided test split. The prepared files are:
 
-- Dataset download and preparation scripts are in place.
-- Hugging Face RT-DETR fine-tuning and COCO evaluation are complete.
-- YOLO11n and Faster R-CNN training pipelines and comparative results are pending.
+- Images under `dataset/model_ready/images/`
+- COCO annotations under `dataset/model_ready/annotations/`
+- YOLO-format labels under `dataset/model_ready/labels/`
+- YOLO configuration at `dataset/model_ready/data.yaml`
 
-## Setup
+### Annotation coverage limitation
 
-Use Python 3.11.17, then install the dependencies from the repository root:
+The original dataset annotations supplied by the dataset author do not
+necessarily label every visually noticeable sign in an image. For example,
+`1671.jpg` contains several signs in the background, but its source COCO
+annotation contains only one labelled object. This is a limitation of the
+source dataset, not an error introduced by this project's preprocessing.
+
+Consequently, a qualitative image may show visible signs that are absent from
+the ground truth. Those signs cannot be counted as missed detections by COCO
+evaluation. Qualitative predictions must therefore be compared with the
+provided annotations, while model quality should be judged primarily using
+metrics computed across the complete split.
+
+## Current status
+
+- Dataset import and preprocessing: complete.
+- RT-DETR training and COCO evaluation: complete.
+- Faster R-CNN training and COCO evaluation: complete.
+- Shared training/validation loss plotting: complete.
+- Single-image prediction and visualization for RT-DETR: complete.
+- Single-image prediction and visualization for Faster R-CNN: complete.
+- YOLO11s training and matching evaluation: pending.
+- Parameter, model-size, and latency/FPS comparison: pending.
+
+## Installation
+
+Use the Python version and dependency versions appropriate for the target
+environment, then install the repository dependencies:
 
 ```bash
 python -m pip install -r requirements.txt
 ```
 
-For an NVIDIA GPU using CUDA 13.2, install the matching PyTorch wheels separately:
+The exact PyTorch wheel depends on the operating system and CUDA version. For
+the CUDA 13.2 wheel index used in the local setup:
 
 ```bash
 pip3 install torch torchvision --index-url https://download.pytorch.org/whl/cu132
 ```
+
+The dependency file documents the verified Kaggle environment separately from
+the platform-specific PyTorch installation.
 
 ## Prepare the dataset
 
@@ -55,37 +102,78 @@ python DETR/scripts/data/import_dataset.py
 python DETR/scripts/preprocess/preprocessing.py
 ```
 
-The first command downloads the Kaggle dataset into `dataset/`. The second validates the source data and creates `dataset/model_ready/` with COCO annotations and YOLO labels.
+The first command downloads and copies the source dataset into `dataset/`.
+The second validates the source data and creates `dataset/model_ready/`.
+Preprocessing stops rather than overwriting an existing prepared directory;
+move or rename that directory before preparing the data again.
 
-Preprocessing stops rather than overwriting an existing `dataset/model_ready/` directory. Move or rename that directory before running preprocessing again.
+## Common experimental protocol
 
-## Fine-tune RT-DETR
+The completed RT-DETR and Faster R-CNN runs were intended to use the same:
 
-After preparing the dataset and installing dependencies, run:
+- Prepared train, validation, and test splits
+- 640 x 640 image processing
+- 50-epoch training budget
+- Seed 42 where supported
+- COCO bounding-box annotations
+- Validation data for checkpoint selection
+- Held-out test data for final reporting
+
+The test split must not be used to select checkpoints or tune thresholds.
+
+Both evaluators use `pycocotools.COCOeval` with `iouType="bbox"`. Evaluation
+uses a score threshold of `0.001` so low-confidence detections remain
+available to the COCO precision-recall calculation. This is different from
+the `0.5` default used for readable demo visualizations.
+
+Reported metrics are:
+
+- `mAP@[.50:.95]`: primary COCO average precision across IoU thresholds
+  0.50 through 0.95.
+- `mAP@.50`: average precision at IoU 0.50.
+- `mAP@.75`: average precision at the stricter IoU 0.75.
+- `AP small`, `AP medium`, and `AP large`: AP grouped by object area.
+- `AR@1`, `AR@10`, and `AR@100`: average recall with the corresponding
+  maximum number of detections per image.
+
+## RT-DETR
+
+### Training
+
+Run on one GPU:
 
 ```bash
 python DETR/scripts/models/train.py
 ```
 
-The Hugging Face training pipeline uses a reproducible 50-epoch, 640-pixel configuration and reads the COCO JSON annotations. It selects the best checkpoint by validation loss and saves the selected model to `outputs/rtdetr_r50vd_comparison_50ep/`. For a clean comparison run, do not set `RESUME_CHECKPOINT`; set it explicitly only when continuing a run created with the same training arguments. On Kaggle with two GPUs, launch the same script with:
+On Kaggle with two GPUs:
 
 ```bash
 torchrun --standalone --nproc_per_node=2 DETR/scripts/models/train.py
 ```
 
-The `OUTPUT_DIR` and `PROJECT_ROOT` environment variables can override the default paths. The evaluator accepts either the training output directory or one checkpoint directory. When given the training output directory, it automatically selects the checkpoint with the lowest recorded validation loss. To evaluate the selected checkpoint on validation, run:
+The default run uses 50 epochs, 640-pixel processing, per-device batch size
+2, gradient accumulation 2, learning rate `5e-5`, weight decay `1e-4`, and
+FP16. The effective batch size with two devices is 8.
+
+The default output directory is
+`outputs/rtdetr_r50vd_comparison_50ep/`. `PROJECT_ROOT` and `OUTPUT_DIR`
+environment variables can override the default paths. Do not set
+`RESUME_CHECKPOINT` for a new comparison run; use it only to continue a run
+with compatible training arguments.
+
+### Evaluation
+
+When an output directory is supplied, the evaluator selects the checkpoint
+with the lowest recorded validation loss:
 
 ```bash
 python DETR/scripts/evaluate/evaluation.py --split validation
-```
-
-After selecting the model using validation results, evaluate it on the held-out test split:
-
-```bash
 python DETR/scripts/evaluate/evaluation.py --split test
 ```
 
-The evaluator reports COCO bbox mAP@[.50:.95], mAP@.50, mAP@.75, and average recall. Use the same selected checkpoint for both commands; reserve the test split for final reporting. Metrics and raw predictions are saved under the selected checkpoint's `evaluation/` directory. To evaluate a specific checkpoint, pass it explicitly:
+For the reported run, the selected checkpoint was
+`checkpoint-4320` (approximately epoch 15):
 
 ```bash
 python DETR/scripts/evaluate/evaluation.py \
@@ -93,55 +181,186 @@ python DETR/scripts/evaluate/evaluation.py \
   --split test
 ```
 
-For Kaggle, set `PROJECT_ROOT` to the repository path before running the commands. Use the same evaluator and COCO annotation files for YOLO11n and Faster R-CNN after converting their predictions to the evaluator's COCO detection format.
+Predictions and metrics are written below the evaluated checkpoint's
+`evaluation/` directory.
 
-## Evaluation methodology
+### Single-image visualization
 
-All models are intended to use the same:
+Print detections as JSON:
 
-- Training, validation, and test splits.
-- 640-pixel input resolution.
-- 50-epoch training budget and fixed random seed where supported.
-- COCO-format annotations and bounding-box evaluation.
-- Validation split for model/checkpoint selection.
-- Held-out test split for the final comparison only.
+```bash
+python DETR/scripts/models/predict.py \
+  --image path/to/image.jpg \
+  --checkpoint outputs/rtdetr_r50vd_comparison_50ep/checkpoint-4320 \
+  --threshold 0.5
+```
 
-The evaluator uses `pycocotools.COCOeval` with `iouType="bbox"` and a low score threshold of `0.001`, which preserves low-confidence detections required for COCO mAP calculation. It reports:
+Create an annotated image:
 
-- `mAP@[.50:.95]`: the primary metric, averaged over IoU thresholds from 0.50 to 0.95.
-- `mAP@.50`: detection precision at the more permissive IoU threshold of 0.50.
-- `mAP@.75`: stricter localization quality.
-- `mAP` by object size: small, medium, and large signs.
-- `AR@1`, `AR@10`, and `AR@100`: average recall with the specified maximum detections per image.
+```bash
+python DETR/scripts/visualisation/visualise.py \
+  --image path/to/image.jpg \
+  --checkpoint outputs/rtdetr_r50vd_comparison_50ep/checkpoint-4320 \
+  --threshold 0.5 \
+  --output outputs/predictions/rtdetr/image_detected.png
+```
 
-For RT-DETR, the selected checkpoint was `checkpoint-4320`, chosen using the lowest validation loss from the 50-epoch run. The validation and test results are:
+The threshold changes which detections are displayed in the demo; it does not
+change the trained model or the COCO evaluation protocol.
+
+## Faster R-CNN
+
+### Training
+
+Faster R-CNN uses a pretrained torchvision
+`fasterrcnn_resnet50_fpn_v2` backbone and replaces the COCO prediction head
+with 52 traffic-sign classes plus the background class.
+
+Run on one GPU:
+
+```bash
+python "Faster R-CNN/scripts/models/train_rcnn.py"
+```
+
+On Kaggle with two GPUs:
+
+```bash
+torchrun --standalone --nproc_per_node=2 \
+  "Faster R-CNN/scripts/models/train_rcnn.py"
+```
+
+The default output directory is
+`outputs/faster_rcnn_comparison_50ep/`. Training resizes images and boxes to
+640 x 640, uses per-device batch size 2, gradient accumulation 2, SGD with
+learning rate `0.005`, momentum `0.9`, weight decay `0.0005`, and learning
+rate milestones at epochs 30 and 40.
+
+Validation loss is computed after every epoch and the lowest-loss model is
+saved as `best.pt`. To resume a compatible run, set `RESUME_CHECKPOINT`; do
+not resume after changing the model, optimizer, batch configuration, or
+training budget.
+
+### Evaluation
+
+Evaluate a selected checkpoint on validation and test data:
+
+```bash
+python "Faster R-CNN/scripts/evaluate/evaluate_rcnn.py" \
+  --checkpoint outputs/faster_rcnn_comparison_50ep/best.pt \
+  --split validation
+
+python "Faster R-CNN/scripts/evaluate/evaluate_rcnn.py" \
+  --checkpoint outputs/faster_rcnn_comparison_50ep/best.pt \
+  --split test
+```
+
+The evaluator exports COCO-format predictions and applies the same
+`pycocotools.COCOeval` metrics used by RT-DETR.
+
+### Single-image visualization
+
+```bash
+python "Faster R-CNN/scripts/visualisation/visualise_rcnn.py" \
+  --image path/to/image.jpg \
+  --checkpoint outputs/faster_rcnn_comparison_50ep/best.pt \
+  --threshold 0.5 \
+  --output outputs/predictions/faster_rcnn/image_detected.png
+```
+
+If `--output` is omitted, the image is saved under
+`outputs/predictions/faster_rcnn/`.
+
+## Loss visualization and checkpoint interpretation
+
+RT-DETR and Faster R-CNN use the same plotting script:
+
+```bash
+python DETR/scripts/visualisation/plot_losses.py \
+  --output-dir outputs/rtdetr_r50vd_comparison_50ep \
+  --model-name rtdetr \
+  --output outputs/plots/rtdetr_full_training_loss.png
+
+python DETR/scripts/visualisation/plot_losses.py \
+  --output-dir outputs/faster_rcnn_comparison_50ep \
+  --model-name faster_rcnn \
+  --output outputs/plots/faster_rcnn_full_training_loss.png
+```
+
+The script reads RT-DETR `trainer_state.json` or Faster R-CNN
+`training_history.json`, plots training and validation loss, and marks the
+lowest validation-loss epoch.
+
+For RT-DETR, validation loss reached its recorded minimum at epoch 15 and
+then generally increased while training loss continued to fall. For Faster
+R-CNN, validation loss reached `0.2639` at epoch 22, then mostly plateaued
+around `0.27` while training loss continued to decrease. These patterns are
+evidence of loss-based overfitting or convergence after the selected point,
+not proof that every later prediction is incorrect.
+
+The curves are useful for checkpoint selection, but loss is not the final
+detection metric. Faster R-CNN's validation loss is a sum of model
+classification/regression losses, while COCO mAP evaluates post-processed
+detections at multiple IoU thresholds. They measure related but different
+properties. The overfitting signal is therefore reported as a limitation,
+while the validation-selected checkpoint remains suitable for comparison
+because it avoids choosing the final model solely because its training loss is
+lower.
+
+## Results
+
+The following values are the recorded COCO results for the completed runs:
 
 | Model | Split | mAP@[.50:.95] | mAP@.50 | mAP@.75 | AP small | AP medium | AP large | AR@100 |
 |---|---|---:|---:|---:|---:|---:|---:|---:|
 | RT-DETR R50vd | Validation | 0.711 | 0.942 | 0.844 | 0.644 | 0.787 | 0.814 | 0.778 |
 | RT-DETR R50vd | Test | 0.757 | 0.973 | 0.917 | 0.695 | 0.801 | 0.891 | 0.816 |
-| YOLO11n | Test | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Faster R-CNN | Test | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| Faster R-CNN | Validation | 0.638 | 0.877 | 0.773 | 0.598 | 0.733 | 0.744 | 0.673 |
+| Faster R-CNN | Test | 0.681 | 0.936 | 0.845 | 0.667 | 0.724 | 0.812 | 0.731 |
+| YOLO11s | Test | Pending | Pending | Pending | Pending | Pending | Pending | Pending |
 
-The RT-DETR test result indicates strong overall detection and localization. Its `mAP@.50` of 0.973 shows high precision at the standard IoU threshold, while `mAP@.75` of 0.917 indicates accurate box placement. `AR@100` of 0.816 indicates strong recall. Small signs are the most difficult group (`AP small` of 0.695), but performance remains substantially strong. The test results are higher than validation results, so these results show no evident overfitting; the test split may simply be easier. The test set must not be used to tune the models.
+### Evidence-based interpretation
 
-The final comparison table will be completed after YOLO11n and Faster R-CNN are trained and evaluated with the same protocol. In addition to accuracy metrics, the project should report parameter count, model size, and inference latency or FPS because real-time suitability is part of the project goal.
+RT-DETR has the higher recorded test `mAP@[.50:.95]` than Faster R-CNN
+(`0.757` versus `0.681`), a difference of `0.076`. It also has higher test
+`AR@100` (`0.816` versus `0.731`), a difference of `0.085`. These metrics
+support the limited conclusion that RT-DETR was the stronger accuracy model
+among the two completed runs under this protocol.
+
+Faster R-CNN still produced useful detections: its test
+`mAP@[.50:.95]` was `0.681`, `mAP@.50` was `0.936`, and `AR@100` was `0.731`.
+The loss curve shows a reason to prefer `best.pt` over the final checkpoint,
+but it does not justify calling the training a failure. The held-out test
+metrics are evidence of generalization, although the higher test scores than
+validation scores may also mean that the test split is easier. No claim about
+real-time suitability is made until latency, FPS, parameter count, and model
+size are measured.
+
+The test results are descriptive of this split and should not be used to tune
+the models. The source annotation limitation also means that COCO metrics
+measure performance on labelled objects, not every sign visible to a human
+viewer.
 
 ## Repository layout
 
 ```text
 DETR/
-  scripts/
-    data/import_dataset.py       # Download and copy the Kaggle dataset
-    preprocess/preprocessing.py  # Validate and prepare COCO and YOLO data
-    models/                      # RT-DETR model and training entry points
-    evaluate/evaluation.py       # COCO detection metrics for a fine-tuned checkpoint
+  scripts/data/import_dataset.py
+  scripts/preprocess/preprocessing.py
+  scripts/models/                 # RT-DETR training and prediction
+  scripts/evaluate/evaluation.py  # RT-DETR COCO evaluation
+  scripts/visualisation/          # Shared prediction and loss plots
+Faster R-CNN/
+  scripts/models/                 # Faster R-CNN training and prediction
+  scripts/evaluate/               # Faster R-CNN COCO evaluation
+  scripts/visualisation/          # Faster R-CNN image visualization
 dataset/
-  archive/                       # Downloaded source dataset
-  model_ready/                   # Prepared images, annotations, labels, and data.yaml
+  archive/                        # Downloaded source dataset
+  model_ready/                    # Prepared images and annotations
+outputs/                          # Training, evaluation, prediction, and plot outputs
 requirements.txt
 ```
 
 ## Dependencies
 
-See [`requirements.txt`](./requirements.txt) for the Python dependencies. GPU-specific PyTorch installation may vary by CUDA version and platform.
+See [requirements.txt](./requirements.txt) for the project dependencies.
+PyTorch and torchvision wheels remain platform- and CUDA-specific.
