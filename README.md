@@ -21,10 +21,7 @@ The comparison is designed to answer two questions:
 1. How accurately can each model locate and classify the annotated signs?
 2. What trade-offs exist between detection quality and eventual real-time use?
 
-The second question cannot be answered from accuracy alone. Parameter count,
-model size, and latency or FPS still need to be measured under the same
-hardware and inference settings. This project is exploratory and is not
-intended for safety-critical or real-world driving use.
+To compare detection performance, we plan to train YOLO11s, RT-DETR, and Faster R-CNN on the same dataset and evaluate them using the same metrics. This comparison will help us understand the trade-offs between detection quality and suitability for real-time use. However, the second question cannot be answered from accuracy alone. Parameter count, model size, and latency or FPS still need to be measured under the same hardware and inference settings. This project is exploratory and is not intended for safety-critical or real-world driving use.
 
 ## Dataset
 
@@ -48,6 +45,9 @@ data, while retaining the provided test split. The prepared files are:
 - COCO annotations under `dataset/model_ready/annotations/`
 - YOLO-format labels under `dataset/model_ready/labels/`
 - YOLO configuration at `dataset/model_ready/data.yaml`
+- Dataset download and preparation scripts are in place.
+- Hugging Face RT-DETR fine-tuning and COCO evaluation are complete.
+- YOLO11s and Faster R-CNN training pipelines and comparative results are pending.
 
 ### Annotation coverage limitation
 
