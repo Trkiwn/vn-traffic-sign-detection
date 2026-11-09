@@ -9,7 +9,7 @@ import tempfile
 from PIL import Image
 
 
-DATASET_ROOT = Path(__file__).resolve().parents[3] / "dataset"
+DATASET_ROOT = Path(__file__).resolve().parents[2] / "dataset"
 SOURCE_ROOT = DATASET_ROOT / "archive"
 OUTPUT_ROOT = DATASET_ROOT / "model_ready"
 VALIDATION_FRACTION = 0.1

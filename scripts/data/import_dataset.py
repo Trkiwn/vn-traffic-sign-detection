@@ -4,7 +4,7 @@ import shutil
 import kagglehub
 
 DATASET_HANDLE = "maitam/vietnamese-traffic-signs"
-DATASET_ROOT = Path(__file__).resolve().parents[3] / "dataset"
+DATASET_ROOT = Path(__file__).resolve().parents[2] / "dataset"
 
 download_path = Path(kagglehub.dataset_download(DATASET_HANDLE))
 if not download_path.is_dir():

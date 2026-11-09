@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 
 
 PROJECT_ROOT = Path(
-    os.environ.get("PROJECT_ROOT", str(Path(__file__).resolve().parents[3]))
+    os.environ.get("PROJECT_ROOT", str(Path(__file__).resolve().parents[2]))
 )
 
 
