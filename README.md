@@ -309,13 +309,19 @@ The table reports held-out test-set COCO results only. Validation data was
 used for checkpoint selection, but validation performance is omitted from the
 reported comparison.
 
+<<<<<<< HEAD
+| Model | mAP@[.50:.95] | mAP@.50 | mAP@.75 | AP small | AP medium | AP large | AR@100 |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| RT-DETR R50vd | 0.757 | 0.973 | 0.917 | 0.695 | 0.801 | 0.891 | 0.816 |
+| Faster R-CNN | 0.681 | 0.936 | 0.845 | 0.667 | 0.724 | 0.812 | 0.731 |
+| YOLO11s | Pending | Pending | Pending | Pending | Pending | Pending | Pending |
+=======
 | Model | Split | mAP@[.50:.95] | mAP@.50 | mAP@.75 | AP small | AP medium | AP large | AR@100 |
 |---|---|---:|---:|---:|---:|---:|---:|---:|
-| RT-DETR R50vd | Validation | 0.711 | 0.942 | 0.844 | 0.644 | 0.787 | 0.814 | 0.778 |
 | RT-DETR R50vd | Test | 0.757 | 0.973 | 0.917 | 0.695 | 0.801 | 0.891 | 0.816 |
-| Faster R-CNN | Validation | 0.638 | 0.877 | 0.773 | 0.598 | 0.733 | 0.744 | 0.673 |
 | Faster R-CNN | Test | 0.681 | 0.936 | 0.845 | 0.667 | 0.724 | 0.812 | 0.731 |
 | YOLO11s | Test | Pending | Pending | Pending | Pending | Pending | Pending | Pending |
+>>>>>>> 453f1d4702bb64e6620b07bfa93ce188fd9d27e1
 
 ### Evidence-based interpretation
 
