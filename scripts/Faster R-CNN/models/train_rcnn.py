@@ -75,7 +75,33 @@ def main() -> None:
     scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[30, 40], gamma=0.1)
     start_epoch, history = 0, []
     if RESUME_CHECKPOINT:
-        start_epoch = load_checkpoint(Path(RESUME_CHECKPOINT), model, optimizer, scheduler)
+        resume_path = Path(RESUME_CHECKPOINT).resolve()
+        if resume_path.parent != OUTPUT_DIR.resolve():
+            raise ValueError(
+                "RESUME_CHECKPOINT must be in OUTPUT_DIR so the matching best "
+                "checkpoint and training history can be preserved."
+            )
+        start_epoch, history = load_checkpoint(
+            resume_path,
+            model,
+            optimizer,
+            scheduler,
+        )
+        if start_epoch and (
+            not history or int(history[-1].get("epoch", -1)) != start_epoch
+        ):
+            raise ValueError(
+                "Resume checkpoint is missing matching training history; "
+                "cannot safely continue best-checkpoint selection."
+            )
+        history_path = OUTPUT_DIR / "training_history.json"
+        if history_path.is_file():
+            saved_history = json.loads(history_path.read_text(encoding="utf-8"))
+            if saved_history and int(saved_history[-1]["epoch"]) > start_epoch:
+                raise ValueError(
+                    "OUTPUT_DIR history extends beyond the resume checkpoint. "
+                    "Resume from a checkpoint matching the latest saved history."
+                )
     if distributed:
         model = DistributedDataParallel(model, device_ids=[local_rank], find_unused_parameters=False)
     scaler = torch.cuda.amp.GradScaler(enabled=device.type == "cuda")
@@ -85,23 +111,31 @@ def main() -> None:
         model.train()
         optimizer.zero_grad(set_to_none=True)
         loss_total, batches = 0.0, 0
+        num_batches = len(loader)
         for batch_index, (images, targets) in enumerate(loader):
             images = [image.to(device, non_blocking=True) for image in images]
             targets = [{key: value.to(device, non_blocking=True) for key, value in target.items()} for target in targets]
+            group_start = (
+                batch_index // GRADIENT_ACCUMULATION_STEPS
+            ) * GRADIENT_ACCUMULATION_STEPS
+            accumulation_group_size = min(
+                GRADIENT_ACCUMULATION_STEPS,
+                num_batches - group_start,
+            )
             with torch.cuda.amp.autocast(enabled=device.type == "cuda"):
                 losses = model(images, targets)
-                loss = sum(losses.values()) / GRADIENT_ACCUMULATION_STEPS
+                loss = sum(losses.values()) / accumulation_group_size
             scaler.scale(loss).backward()
-            if (batch_index + 1) % GRADIENT_ACCUMULATION_STEPS == 0:
+            is_accumulation_boundary = (
+                (batch_index + 1) % GRADIENT_ACCUMULATION_STEPS == 0
+                or batch_index + 1 == num_batches
+            )
+            if is_accumulation_boundary:
                 scaler.step(optimizer)
                 scaler.update()
                 optimizer.zero_grad(set_to_none=True)
-            loss_total += float(loss.detach()) * GRADIENT_ACCUMULATION_STEPS
+            loss_total += float(loss.detach()) * accumulation_group_size
             batches += 1
-        if batches % GRADIENT_ACCUMULATION_STEPS:
-            scaler.step(optimizer)
-            scaler.update()
-            optimizer.zero_grad(set_to_none=True)
         scheduler.step()
         epoch_loss = loss_total / max(1, batches)
         if distributed:

@@ -103,11 +103,19 @@ def save_checkpoint(path, model, optimizer, scheduler, epoch, history) -> None:
     }, path)
 
 
-def load_checkpoint(path, model, optimizer=None, scheduler=None) -> int:
+def load_checkpoint(
+    path,
+    model,
+    optimizer=None,
+    scheduler=None,
+) -> tuple[int, list[dict[str, Any]]]:
     checkpoint = torch.load(path, map_location="cpu", weights_only=False)
     model.load_state_dict(checkpoint.get("model_state", checkpoint))
     if optimizer is not None and "optimizer_state" in checkpoint:
         optimizer.load_state_dict(checkpoint["optimizer_state"])
     if scheduler is not None and "scheduler_state" in checkpoint:
         scheduler.load_state_dict(checkpoint["scheduler_state"])
-    return int(checkpoint.get("epoch", 0))
+    history = checkpoint.get("history", [])
+    if not isinstance(history, list):
+        raise ValueError(f"Checkpoint contains invalid training history: {path}")
+    return int(checkpoint.get("epoch", 0)), history
