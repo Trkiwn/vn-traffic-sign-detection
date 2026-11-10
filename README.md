@@ -46,6 +46,11 @@ data, while retaining the provided test split. The prepared files are:
 - YOLO-format labels under `dataset/model_ready/labels/`
 - YOLO configuration at `dataset/model_ready/data.yaml`
 
+The generated YOLO configuration omits a machine-specific dataset root.
+Ultralytics resolves its relative split paths from the configuration file's
+directory, so the file can be used after moving `model_ready/` to another
+machine or runtime.
+
 ### Annotation coverage limitation
 
 The original dataset annotations supplied by the dataset author do not
@@ -56,7 +61,8 @@ source dataset, not an error introduced by this project's preprocessing.
 
 Consequently, a qualitative image may show visible signs that are absent from
 the ground truth. Those signs cannot be counted as missed detections by COCO
-evaluation. Qualitative predictions must therefore be compared with the
+evaluation; however, predictions on unannotated signs may be counted as false
+positives. Qualitative predictions must therefore be compared with the
 provided annotations, while model quality should be judged primarily using
 metrics computed across the complete split.
 
@@ -117,6 +123,8 @@ The completed RT-DETR and Faster R-CNN runs were intended to use the same:
 - Held-out test data for final reporting
 
 The test split must not be used to select checkpoints or tune thresholds.
+RT-DETR training and validation do not access the test split; run the explicit
+COCO evaluator on the test split only after selecting the checkpoint.
 
 Both evaluators use `pycocotools.COCOeval` with `iouType="bbox"`. Evaluation
 uses a score threshold of `0.001` so low-confidence detections remain
@@ -233,9 +241,16 @@ learning rate `0.005`, momentum `0.9`, weight decay `0.0005`, and learning
 rate milestones at epochs 30 and 40.
 
 Validation loss is computed after every epoch and the lowest-loss model is
-saved as `best.pt`. To resume a compatible run, set `RESUME_CHECKPOINT`; do
-not resume after changing the model, optimizer, batch configuration, or
-training budget.
+saved as `best.pt`. To resume a compatible run, set `RESUME_CHECKPOINT` to a
+checkpoint in the same `OUTPUT_DIR`; training history and best-checkpoint
+selection are restored from that checkpoint. The script refuses to resume
+when the output history is newer than the chosen checkpoint. Do not resume
+after changing the model, optimizer, batch configuration, or training budget.
+
+The existing recorded Faster R-CNN results were produced before the final
+partial gradient-accumulation group was scaled correctly. The correction
+affects one optimizer update per epoch when the number of batches is odd;
+retrain to regenerate results that exactly match the corrected implementation.
 
 ### Evaluation
 
@@ -309,19 +324,11 @@ The table reports held-out test-set COCO results only. Validation data was
 used for checkpoint selection, but validation performance is omitted from the
 reported comparison.
 
-<<<<<<< HEAD
 | Model | mAP@[.50:.95] | mAP@.50 | mAP@.75 | AP small | AP medium | AP large | AR@100 |
 |---|---:|---:|---:|---:|---:|---:|---:|
 | RT-DETR R50vd | 0.757 | 0.973 | 0.917 | 0.695 | 0.801 | 0.891 | 0.816 |
 | Faster R-CNN | 0.681 | 0.936 | 0.845 | 0.667 | 0.724 | 0.812 | 0.731 |
 | YOLO11s | Pending | Pending | Pending | Pending | Pending | Pending | Pending |
-=======
-| Model | Split | mAP@[.50:.95] | mAP@.50 | mAP@.75 | AP small | AP medium | AP large | AR@100 |
-|---|---|---:|---:|---:|---:|---:|---:|---:|
-| RT-DETR R50vd | Test | 0.757 | 0.973 | 0.917 | 0.695 | 0.801 | 0.891 | 0.816 |
-| Faster R-CNN | Test | 0.681 | 0.936 | 0.845 | 0.667 | 0.724 | 0.812 | 0.731 |
-| YOLO11s | Test | Pending | Pending | Pending | Pending | Pending | Pending | Pending |
->>>>>>> 453f1d4702bb64e6620b07bfa93ce188fd9d27e1
 
 ### Evidence-based interpretation
 
