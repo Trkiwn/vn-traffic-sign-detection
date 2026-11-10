@@ -382,7 +382,6 @@ def main() -> None:
             write_yolo_labels(coco, split_labels)
 
         yolo_config = {
-            "path": ".",
             "train": "images/train",
             "val": "images/validation",
             "test": "images/test",
