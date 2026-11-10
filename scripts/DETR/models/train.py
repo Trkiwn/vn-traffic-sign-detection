@@ -21,7 +21,6 @@ DATASET_ROOT = PROJECT_ROOT / "dataset" / "model_ready"
 ANNOTATIONS_DIR = DATASET_ROOT / "annotations"
 TRAIN_ANNOTATIONS = ANNOTATIONS_DIR / "instances_train.json"
 VALIDATION_ANNOTATIONS = ANNOTATIONS_DIR / "instances_validation.json"
-TEST_ANNOTATIONS = ANNOTATIONS_DIR / "instances_test.json"
 NUM_LABELS = 52
 IMAGE_SIZE = 640
 OUTPUT_DIR = Path(
@@ -159,7 +158,6 @@ def main() -> None:
     required_files = (
         TRAIN_ANNOTATIONS,
         VALIDATION_ANNOTATIONS,
-        TEST_ANNOTATIONS,
     )
     missing_files = [path for path in required_files if not path.is_file()]
     if missing_files:
@@ -192,13 +190,6 @@ def main() -> None:
         processor,
         ID2LABEL,
     )
-    test_dataset = CocoDetectionDataset(
-        TEST_ANNOTATIONS,
-        DATASET_ROOT / "images" / "test",
-        processor,
-        ID2LABEL,
-    )
-
     trainer = Trainer(
         model=model,
         args=TRAINING_ARGUMENTS,
@@ -217,33 +208,8 @@ def main() -> None:
     else:
         trainer.train()
 
-    final_model = trainer.model
     trainer.save_model(TRAINING_ARGUMENTS.output_dir)
     processor.save_pretrained(TRAINING_ARGUMENTS.output_dir)
-
-    test_arguments = TrainingArguments(
-        output_dir=TRAINING_ARGUMENTS.output_dir,
-        per_device_eval_batch_size=TRAINING_ARGUMENTS.per_device_eval_batch_size,
-        dataloader_num_workers=TRAINING_ARGUMENTS.dataloader_num_workers,
-        dataloader_pin_memory=TRAINING_ARGUMENTS.dataloader_pin_memory,
-        dataloader_persistent_workers=TRAINING_ARGUMENTS.dataloader_persistent_workers,
-        bf16=TRAINING_ARGUMENTS.bf16,
-        fp16=TRAINING_ARGUMENTS.fp16,
-        remove_unused_columns=False,
-        report_to="none",
-    )
-    test_trainer = Trainer(
-        model=final_model,
-        args=test_arguments,
-        data_collator=collate_fn,
-        processing_class=processor,
-    )
-    test_metrics = test_trainer.evaluate(
-        eval_dataset=test_dataset,
-        metric_key_prefix="test",
-    )
-    test_trainer.log_metrics("test", test_metrics)
-    test_trainer.save_metrics("test", test_metrics)
 
 
 if __name__ == "__main__":
