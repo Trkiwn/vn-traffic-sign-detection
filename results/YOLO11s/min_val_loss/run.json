@@ -1,0 +1,88 @@
+{
+  "dataset": {
+    "track": "historical",
+    "dataset_sha256": "27293967ac55863ac998723f5af6cacad8afeac0ee6db4bfba9ab86b3aa6319b",
+    "splits": {
+      "train": {
+        "images": 2297,
+        "annotations": 5638,
+        "annotation_sha256": "4c46c74aec746a3c4888717797612e71f0dfacb79101a6479af3cd897d10e339",
+        "image_manifest_sha256": "616f1622bde0d4080ea83abd0431b1592d209ba959260073154c8879b2a5ce0c"
+      },
+      "validation": {
+        "images": 255,
+        "annotations": 1051,
+        "annotation_sha256": "2ba5979536355c0da659c3170430ce531294b455aa7018957c2ddabf91f8449d",
+        "image_manifest_sha256": "111a7741e24e7693030fdca10d04e0affb3ca69c33d39ebd2f2d8dd82d8528db"
+      },
+      "test": {
+        "images": 639,
+        "annotations": 1645,
+        "annotation_sha256": "01a55daab4ef7227c738025be162d4a496cea6cd0a90b7a26fbff69a447c6a05",
+        "image_manifest_sha256": "cec2c82c7dcc95ff399c19befd7327056793c643a0500c597273629e63d348f4"
+      }
+    },
+    "group_count": 0,
+    "exact_cross_split_hashes": 0
+  },
+  "protocol": {
+    "track": "historical",
+    "purpose": "colab_pilot",
+    "phase2a_complete": false,
+    "dataset_sha256": "27293967ac55863ac998723f5af6cacad8afeac0ee6db4bfba9ab86b3aa6319b"
+  },
+  "environment": {
+    "python": "3.13.16",
+    "platform": "Linux-6.6.159+-x86_64-with-glibc2.39",
+    "packages": {
+      "ultralytics": "8.4.189",
+      "pycocotools": "2.0.11",
+      "torch": "2.14.1+cu130",
+      "torchvision": "0.29.1+cu130",
+      "Pillow": "11.3.0"
+    },
+    "cuda": "13.0",
+    "visible_cuda_devices": [
+      "Tesla T4"
+    ]
+  },
+  "initializer_sha256": "85a76fe86dd8afe384648546b56a7a78580c7cb7b404fc595f97969322d502d5",
+  "train_options": {
+    "epochs": 50,
+    "imgsz": 640,
+    "seed": 42,
+    "deterministic": true,
+    "optimizer": "AdamW",
+    "lr0": 0.000179,
+    "weight_decay": 0.0005,
+    "nbs": 8,
+    "amp": true,
+    "rect": false,
+    "cache": false,
+    "patience": 0,
+    "save_period": 1,
+    "val": false,
+    "plots": false,
+    "resume": false,
+    "mosaic": 0.0,
+    "mixup": 0.0,
+    "copy_paste": 0.0,
+    "cutmix": 0.0,
+    "degrees": 0.0,
+    "translate": 0.0,
+    "scale": 0.0,
+    "shear": 0.0,
+    "perspective": 0.0,
+    "flipud": 0.0,
+    "fliplr": 0.0,
+    "hsv_h": 0.0,
+    "hsv_s": 0.0,
+    "hsv_v": 0.0,
+    "augmentations": [],
+    "batch": 8,
+    "device": "0",
+    "workers": 2
+  },
+  "geometry": "640x640 RGB bicubic stretch",
+  "checkpoint_rule": "max COCO val AP, earliest tie"
+}
