@@ -12,9 +12,10 @@ Final project by Group 5 for the Introduction to Computer Science course
 ## Project objective
 
 This project compares object-detection models on Vietnamese traffic-sign
-images. The completed pipelines currently cover RT-DETR and Faster R-CNN;
-YOLO11s is planned but has not yet been trained and evaluated in this
-repository.
+images. RT-DETR, Faster R-CNN, and YOLO11s now have recorded historical-split
+training and test results. YOLO11s uses a retrospective minimum-validation-loss
+checkpoint selection to match the selection principle of the other two models.
+The comparison remains exploratory rather than a confirmed leakage-free benchmark.
 
 The comparison is designed to answer two questions:
 
@@ -74,7 +75,8 @@ metrics computed across the complete split.
 - Shared training/validation loss plotting: complete.
 - Single-image prediction and visualization for RT-DETR: complete.
 - Single-image prediction and visualization for Faster R-CNN: complete.
-- YOLO11s training and matching evaluation: pending.
+- YOLO11s training (50 epochs), offline minimum-validation-loss checkpoint
+  selection, and retrospective COCO test evaluation: complete.
 - Parameter, model-size, and latency/FPS comparison: pending.
 
 ## Installation
@@ -112,7 +114,7 @@ move or rename that directory before preparing the data again.
 
 ## Common experimental protocol
 
-The completed RT-DETR and Faster R-CNN runs were intended to use the same:
+The RT-DETR, Faster R-CNN, and YOLO11s experiments were intended to use the same:
 
 - Prepared train, validation, and test splits
 - 640 x 640 image processing
@@ -126,7 +128,15 @@ The test split must not be used to select checkpoints or tune thresholds.
 RT-DETR training and validation do not access the test split; run the explicit
 COCO evaluator on the test split only after selecting the checkpoint.
 
-Both evaluators use `pycocotools.COCOeval` with `iouType="bbox"`. Evaluation
+All three models use the *minimum validation-loss* checkpoint-selection
+principle, but their architecture-specific loss values cannot be compared
+numerically. Faster R-CNN records validation loss during training; the
+historical YOLO11s run saved all 50 checkpoints with `val=False`, so its
+validation loss was computed **offline afterward** using only the 255
+validation images. The YOLO11s min-loss test is **retrospective**, because an
+earlier max-validation-AP pilot had already evaluated the historical test split.
+
+All three model evaluations use `pycocotools.COCOeval` with `iouType="bbox"`. Evaluation
 uses a score threshold of `0.001` so low-confidence detections remain
 available to the COCO precision-recall calculation. This is different from
 the `0.5` default used for readable demo visualizations.
@@ -282,6 +292,108 @@ python "scripts/Faster R-CNN/visualisation/visualise_rcnn.py" \
 If `--output` is omitted, the image is saved under
 `outputs/predictions/faster_rcnn/`.
 
+## YOLO11s
+
+### Training
+
+YOLO11s uses an Ultralytics `yolo11s.pt` COCO-pretrained initializer and the
+same prepared 52-class train/validation/test split. The historical run was
+trained on a single Colab GPU for **50 epochs**, with **640 x 640** image
+processing, batch size **8**, seed **42**, AdamW (`lr0=0.000179`,
+`weight_decay=0.0005`), FP16 automatic mixed precision, and disabled spatial
+and color augmentation. Images were stretched to 640 x 640 using RGB bicubic
+interpolation instead of letterbox padding.
+
+The source of the training, validation-loss selection, and test evaluation
+pipeline is the [YOLO11s Colab notebook](notebooks/VGU_YOLO11s_MinValLoss_GitHub_Ready.ipynb).
+Open the notebook in Google Colab, select a GPU runtime and configure its
+first code cell. For an **entirely new run** with your own prepared dataset and
+pretrained weights, use:
+
+```python
+MODE = "reproduce"  # Can train; not required for the completed historical run
+RUN_NAME = "yolo11s_new_experiment"  # Do not overwrite the archived pilot
+DATASET = Path("/content/drive/MyDrive/model_ready")
+# WEIGHTS must point to the official pretrained yolo11s.pt on the runtime.
+```
+
+**Do not retrain the historical experiment just to evaluate it.** The
+completed checkpoint series is retained separately on the run owner's Drive,
+under `VGU_TrafficSign_Project/yolo11s_colab_runs/yolo11s_colab_pilot_01/`.
+The repository package contains the saved JSON evidence, **not** the `.pt`
+model weights. The Colab setup is platform-specific; the Kaggle dependency
+versions in `requirements.txt` are not a bit-for-bit record of the Colab
+runtime. See [the YOLO11s report](docs/YOLO11s_EXPERIMENT_REPORT.md).
+
+### Evaluation
+
+The original YOLO11s pilot selected the checkpoint with the **maximum
+validation COCO AP**. To align its checkpoint-selection rule with RT-DETR and
+Faster R-CNN without retraining, all **50 saved checkpoints** were evaluated
+offline on **255 validation images (32 batches each)**. The three gain-weighted
+Ultralytics detection loss components (`box_loss`, `cls_loss`, `dfl_loss`)
+were averaged per batch and summed. The checkpoint with the **lowest total
+validation loss** was selected, with earliest-epoch tie-breaking:
+
+- **Selected epoch:** 37/50 (`training/weights/epoch36.pt`, zero-based file numbering).
+- **Minimum validation loss:** `2.315651791`.
+- **Checkpoint SHA-256:** `05cf921fffd4c46df7b18ea8958c84e29bc228207a65590958c9d16cee42544c`.
+
+On the original Colab GPU runtime, `MODE="select"` checks the saved 50-epoch
+run and uses/recomputes the offline selection without retraining:
+
+```python
+MODE = "select"  # Read existing checkpoints; no model.train() call
+```
+
+The selected checkpoint was then evaluated once on the historical test set
+using COCO bounding-box metrics (`conf=0.001`, NMS IoU `0.7`, up to 100
+detections per image). Inference boxes are mapped back from 640 x 640 to the
+original image coordinates. The main recorded result is
+**mAP@[.50:.95] = 0.703166680** on 639 images, with 2,461 COCO predictions.
+
+To recompute **COCOeval from the saved predictions** on a machine with the
+prepared dataset, run these commands from the repository root:
+
+```bash
+python -m pip install pycocotools==2.0.11
+python scripts/YOLO11s/replay_coco.py --split test
+```
+
+This replay needs neither GPU nor weights. The saved artifacts are under
+`results/YOLO11s/min_val_loss/`. The original max-AP-selected pilot is
+preserved under `results/YOLO11s/max_val_ap_pilot/`; those pilot metrics
+**must not** be substituted for the min-loss-selected test results.
+
+### Single-image visualization
+
+The repository provides a lightweight image demo with the same 640 x 640
+stretching and original-image box-coordinate conversion as the Colab run.
+**Download the selected 52-class `epoch36.pt` checkpoint from the run owner
+first**; it is not included in GitHub.
+
+Print the model's detections as JSON (0.5 is a *display* threshold):
+
+```bash
+python scripts/YOLO11s/visualisation/visualise_yolo11s.py \
+  --image path/to/image.jpg \
+  --checkpoint path/to/epoch36.pt \
+  --threshold 0.5
+```
+
+Create an annotated image while also printing the JSON detections:
+
+```bash
+python scripts/YOLO11s/visualisation/visualise_yolo11s.py \
+  --image path/to/image.jpg \
+  --checkpoint path/to/epoch36.pt \
+  --threshold 0.5 \
+  --output outputs/predictions/yolo11s/image_detected.png
+```
+
+The 0.5 demo threshold is not used for COCO evaluation, which retains
+predictions down to confidence 0.001.
+
 ## Loss visualization and checkpoint interpretation
 
 RT-DETR and Faster R-CNN use the same plotting script:
@@ -301,6 +413,21 @@ python scripts/visual_plot/plot_losses.py \
 The script reads RT-DETR `trainer_state.json` or Faster R-CNN
 `training_history.json`, plots training and validation loss, and marks the
 lowest validation-loss epoch.
+
+YOLO11s has a separate **offline validation-loss history** because its
+historical training used `val=False`; there is no per-epoch training-time
+validation-loss curve. Plot the 50 retrospectively computed validation losses
+and mark their minimum using:
+
+```bash
+python scripts/YOLO11s/plot_val_loss.py \
+  --history results/YOLO11s/min_val_loss/val_loss_history.json \
+  --output outputs/plots/yolo11s_validation_loss.png
+```
+
+The minimum was at epoch **37** (total loss `2.315651791`). It is not
+meaningful to compare absolute YOLO11s loss values to those of RT-DETR or
+Faster R-CNN because the architectures optimize different objectives.
 
 For RT-DETR, validation loss reached its recorded minimum at epoch 15 and
 then generally increased while training loss continued to fall. For Faster
@@ -328,7 +455,7 @@ reported comparison.
 |---|---:|---:|---:|---:|---:|---:|---:|
 | RT-DETR R50vd | 0.757 | 0.973 | 0.917 | 0.695 | 0.801 | 0.891 | 0.816 |
 | Faster R-CNN | 0.681 | 0.936 | 0.845 | 0.667 | 0.724 | 0.812 | 0.731 |
-| YOLO11s | Pending | Pending | Pending | Pending | Pending | Pending | Pending |
+| YOLO11s | 0.703 | 0.924 | 0.840 | 0.687 | 0.751 | 0.843 | 0.749 |
 
 ### Evidence-based interpretation
 
@@ -336,7 +463,10 @@ RT-DETR has the higher recorded test `mAP@[.50:.95]` than Faster R-CNN
 (`0.757` versus `0.681`), a difference of `0.076`. It also has higher test
 `AR@100` (`0.816` versus `0.731`), a difference of `0.085`. These metrics
 support the limited conclusion that RT-DETR was the stronger accuracy model
-among the two completed runs under this protocol.
+among the recorded runs under this historical protocol. YOLO11s ranked second
+by recorded mAP@[.50:.95] (`0.703167`), between RT-DETR (`0.757`) and
+Faster R-CNN (`0.681`). The YOLO11s result uses epoch 37 selected via
+minimum offline validation loss, not epoch 36 from the earlier max-AP pilot.
 
 Faster R-CNN's test `mAP@[.50:.95]` was `0.681`, `mAP@.50` was `0.936`, and
 `AR@100` was `0.731`. Its loss curve supports choosing the validation-selected
@@ -344,10 +474,15 @@ Faster R-CNN's test `mAP@[.50:.95]` was `0.681`, `mAP@.50` was `0.936`, and
 mean training failed. No claim about real-time suitability is made until
 latency, FPS, parameter count, and model size are measured.
 
-The test results are descriptive of this split and should not be used to tune
-the models. The source annotation limitation also means that COCO metrics
-measure performance on labelled objects, not every sign visible to a human
-viewer.
+The test results are descriptive of this historical split and should not
+be used to tune the models. Earlier dataset audits identified possible
+train/test near-scene overlap, and the YOLO11s min-loss criterion was applied
+after the test had already been inspected under a different rule. Therefore,
+these figures do **not** establish a leakage-free, prospective benchmark;
+a scene-disjoint split and retraining of all three models would be required
+for stronger confirmation. The source annotation limitation also means that
+COCO metrics measure performance on labelled objects, not every sign visible
+to a human viewer.
 
 ## Repository layout
 
@@ -361,6 +496,10 @@ scripts/
     models/                       # Faster R-CNN training and prediction
     evaluate/                     # Faster R-CNN COCO evaluation
     visualisation/                # Faster R-CNN image visualization
+  YOLO11s/
+    replay_coco.py                # Reproduce COCO metrics without GPU
+    plot_val_loss.py              # Plot offline YOLO validation loss
+    visualisation/                # YOLO11s image visualization
   preprocessing/                  # Prepare COCO and YOLO dataset files
   visual_plot/                    # Shared training/validation loss plots
   data/                           # Dataset download/import
@@ -368,6 +507,13 @@ dataset/
   archive/                        # Downloaded source dataset
   model_ready/                    # Prepared images and annotations
 outputs/                          # Training, evaluation, prediction, and plot outputs
+notebooks/
+  VGU_YOLO11s_MinValLoss_GitHub_Ready.ipynb  # YOLO11s training/selection/test
+results/YOLO11s/
+  min_val_loss/                   # Main retrospective results, including predictions
+  max_val_ap_pilot/               # Original pilot retained for provenance
+docs/
+  YOLO11s_EXPERIMENT_REPORT.md   # Methodology, results and limitations
 requirements.txt
 ```
 
