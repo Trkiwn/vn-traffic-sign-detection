@@ -304,8 +304,10 @@ processing, batch size **8**, seed **42**, AdamW (`lr0=0.000179`,
 and color augmentation. Images were stretched to 640 x 640 using RGB bicubic
 interpolation instead of letterbox padding.
 
+Unlike the RT-DETR and Faster R-CNN runs, YOLO11s was executed in Colab. Its
+training entrypoint is a versioned `.ipynb` file, not a standalone `train.py`.
 The source of the training, validation-loss selection, and test evaluation
-pipeline is the [YOLO11s Colab notebook](notebooks/VGU_YOLO11s_MinValLoss_GitHub_Ready.ipynb).
+pipeline is the [YOLO11s Colab notebook](scripts/YOLO11s/models/VGU_YOLO11s_MinValLoss_GitHub_Ready.ipynb).
 Open the notebook in Google Colab, select a GPU runtime and configure its
 first code cell. For an **entirely new run** with your own prepared dataset and
 pretrained weights, use:
@@ -357,7 +359,7 @@ prepared dataset, run these commands from the repository root:
 
 ```bash
 python -m pip install pycocotools==2.0.11
-python scripts/YOLO11s/replay_coco.py --split test
+python scripts/YOLO11s/evaluate/replay_coco.py --split test
 ```
 
 This replay needs neither GPU nor weights. The saved artifacts are under
@@ -420,7 +422,7 @@ validation-loss curve. Plot the 50 retrospectively computed validation losses
 and mark their minimum using:
 
 ```bash
-python scripts/YOLO11s/plot_val_loss.py \
+python scripts/YOLO11s/visualisation/plot_val_loss.py \
   --history results/YOLO11s/min_val_loss/val_loss_history.json \
   --output outputs/plots/yolo11s_validation_loss.png
 ```
@@ -447,7 +449,7 @@ lower.
 
 ## Results
 
-The table reports held-out test-set COCO results only. Validation data was
+The table reports historical test-set COCO results only. Validation data was
 used for checkpoint selection, but validation performance is omitted from the
 reported comparison.
 
@@ -497,9 +499,9 @@ scripts/
     evaluate/                     # Faster R-CNN COCO evaluation
     visualisation/                # Faster R-CNN image visualization
   YOLO11s/
-    replay_coco.py                # Reproduce COCO metrics without GPU
-    plot_val_loss.py              # Plot offline YOLO validation loss
-    visualisation/                # YOLO11s image visualization
+    models/                       # Colab training, selection and test notebook
+    evaluate/                     # COCOeval replay from saved predictions (no GPU)
+    visualisation/                # Single-image demo and validation-loss plot
   preprocessing/                  # Prepare COCO and YOLO dataset files
   visual_plot/                    # Shared training/validation loss plots
   data/                           # Dataset download/import
@@ -507,8 +509,6 @@ dataset/
   archive/                        # Downloaded source dataset
   model_ready/                    # Prepared images and annotations
 outputs/                          # Training, evaluation, prediction, and plot outputs
-notebooks/
-  VGU_YOLO11s_MinValLoss_GitHub_Ready.ipynb  # YOLO11s training/selection/test
 results/YOLO11s/
   min_val_loss/                   # Main retrospective results, including predictions
   max_val_ap_pilot/               # Original pilot retained for provenance
