@@ -11,6 +11,7 @@ from model_rcnn import CocoDetectionDataset, build_model, collate_fn, load_check
 def predict(checkpoint: Path, split: str, output: Path, batch_size: int, num_workers: int, score_threshold: float) -> None:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = build_model(pretrained=False).to(device)
+    model.roi_heads.score_thresh = score_threshold  # torchvision default is 0.05
     load_checkpoint(checkpoint, model)
     model.eval()
     dataset = CocoDetectionDataset(split)
