@@ -1,0 +1,19 @@
+{
+  "run": "yolo11s_colab_pilot_01",
+  "dataset_track": "historical",
+  "purpose": "colab_pilot",
+  "selected_epoch": 36,
+  "checkpoint_filename": "epoch35.pt",
+  "selection": "max validation COCO AP@[.50:.95]",
+  "validation_map": 0.6977127122664735,
+  "test_map": 0.7033492208554228,
+  "test_ap50": 0.924195688646508,
+  "test_ap75": 0.8437462456108678,
+  "test_ar100": 0.7486399276357798,
+  "test_images": 639,
+  "test_detections": 2488,
+  "limitations": [
+    "incomplete Phase 2A scene leakage audit",
+    "checkpoint selection criterion differs across models"
+  ]
+}

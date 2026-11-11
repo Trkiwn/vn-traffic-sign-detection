@@ -1,0 +1,12 @@
+{
+  "selection_rule": "minimum YOLO validation loss (box+cls+dfl), earliest tie",
+  "selection_epoch": 37,
+  "checkpoint_sha256": "05cf921fffd4c46df7b18ea8958c84e29bc228207a65590958c9d16cee42544c",
+  "dataset_sha256": "27293967ac55863ac998723f5af6cacad8afeac0ee6db4bfba9ab86b3aa6319b",
+  "score_floor": 0.001,
+  "nms_iou": 0.7,
+  "max_detections_per_image": 100,
+  "images": "test",
+  "evaluation": "COCOeval bbox",
+  "test_status": "RETROSPECTIVE -- historical test already inspected under prior checkpoint rule"
+}

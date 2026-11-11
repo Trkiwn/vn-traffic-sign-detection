@@ -1,0 +1,30 @@
+{
+  "version": "vgu-yolo11s-min-val-loss-1",
+  "selection": "argmin(box_loss + cls_loss + dfl_loss), earliest epoch tie",
+  "criterion": "Ultralytics 8.4.189 YOLO11s DetectionModel.loss",
+  "aggregation": "mean of per-batch loss components (Ultralytics trainer validator convention)",
+  "labels": "COCO train=0-based YOLO labels for 52 classes; validation only",
+  "geometry": "RGB bicubic stretch to 640x640; rect=False; no additional padding",
+  "eval_mode": true,
+  "amp": true,
+  "batch": 8,
+  "workers": 2,
+  "device": "cuda:0",
+  "loss_keys": [
+    "box_loss",
+    "cls_loss",
+    "dfl_loss"
+  ],
+  "dataset_sha256": "27293967ac55863ac998723f5af6cacad8afeac0ee6db4bfba9ab86b3aa6319b",
+  "training_manifest_fingerprint": "4e1a2ac2b0f2e3de8d8ebbebc4b1c3e99d8d7a5ef29c97343054e81d11bcc22a",
+  "test_used_for_selection": false,
+  "historical_test_previously_viewed": true,
+  "packages": {
+    "ultralytics": "8.4.189",
+    "torch": "2.14.1+cu130",
+    "torchvision": "0.29.1+cu130",
+    "numpy": "2.4.6",
+    "Pillow": "11.3.0"
+  },
+  "cuda": "13.0"
+}
