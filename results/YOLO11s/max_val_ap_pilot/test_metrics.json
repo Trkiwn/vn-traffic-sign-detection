@@ -1,0 +1,239 @@
+{
+  "map": 0.7033492208554228,
+  "map_50": 0.924195688646508,
+  "map_75": 0.8437462456108678,
+  "map_small": 0.6874905595836499,
+  "map_medium": 0.7522973743291571,
+  "map_large": 0.8406251317276754,
+  "mar_1": 0.7042913594509418,
+  "mar_10": 0.7486399276357798,
+  "mar_100": 0.7486399276357798,
+  "mar_small": 0.7258143834041819,
+  "mar_medium": 0.7893351751422886,
+  "mar_large": 0.8493393585581085,
+  "evaluated_images": 639,
+  "predictions": 2488,
+  "score_threshold": 0.001,
+  "max_dets": [
+    1,
+    10,
+    100
+  ],
+  "global_detections_per_image": 100,
+  "per_class": {
+    "1": {
+      "name": "Pedestrian Crossing",
+      "map": 0.7017232564892668
+    },
+    "2": {
+      "name": "Equal-level Intersection",
+      "map": 0.44917491749174915
+    },
+    "3": {
+      "name": "No Entry",
+      "map": 0.6586556782277465
+    },
+    "4": {
+      "name": "Right Turn Only",
+      "map": 0.6371012589468982
+    },
+    "5": {
+      "name": "Intersection",
+      "map": 0.6953323903818954
+    },
+    "6": {
+      "name": "Intersection with a non-priority road",
+      "map": 0.7713581923282729
+    },
+    "7": {
+      "name": "Danger zone on the left",
+      "map": 0.7252151255042076
+    },
+    "8": {
+      "name": "No Left Turn",
+      "map": 0.7660816268959824
+    },
+    "9": {
+      "name": "Bus Stop",
+      "map": 0.7085498890971098
+    },
+    "10": {
+      "name": "Roundabout",
+      "map": 0.8044554455445545
+    },
+    "11": {
+      "name": "No Stopping and No Parking",
+      "map": 0.7948896050656559
+    },
+    "12": {
+      "name": "U-Turn Allowed",
+      "map": 0.7139851485148515
+    },
+    "13": {
+      "name": "Lane Allocation",
+      "map": 0.8332455957534477
+    },
+    "14": {
+      "name": "Slow Down",
+      "map": 0.80155511037791
+    },
+    "15": {
+      "name": "No Trucks Allowed",
+      "map": 0.6542220650636492
+    },
+    "16": {
+      "name": "Narrow Road on the Right",
+      "map": 0.4278734395178648
+    },
+    "17": {
+      "name": "Height Limit",
+      "map": 0.786255096097845
+    },
+    "18": {
+      "name": "No U-Turn",
+      "map": 0.8130622289766145
+    },
+    "19": {
+      "name": "No Passenger Cars and Trucks",
+      "map": 0.7468039987920133
+    },
+    "20": {
+      "name": "No U-Turn and No Right Turn",
+      "map": 0.852970297029703
+    },
+    "21": {
+      "name": "No Cars Allowed",
+      "map": 0.6423196605374824
+    },
+    "22": {
+      "name": "Narrow Road on the Left",
+      "map": 0.2737623762376238
+    },
+    "23": {
+      "name": "Uneven Road",
+      "map": 0.7273417558267005
+    },
+    "24": {
+      "name": "No Two or Three-wheeled Vehicles",
+      "map": 0.8365935541928285
+    },
+    "25": {
+      "name": "Customs Checkpoint",
+      "map": 0.7757466996699669
+    },
+    "26": {
+      "name": "Motorcycles Only",
+      "map": 0.5772277227722772
+    },
+    "27": {
+      "name": "Obstacle on the Road",
+      "map": 0.7440304970346658
+    },
+    "28": {
+      "name": "Children Present",
+      "map": 0.7214992927864216
+    },
+    "29": {
+      "name": "Trucks and Containers",
+      "map": 0.6688826025459689
+    },
+    "30": {
+      "name": "No Motorcycles Allowed",
+      "map": 0.7549834983498349
+    },
+    "31": {
+      "name": "Trucks Only",
+      "map": 0.7953498567459577
+    },
+    "32": {
+      "name": "Road with Surveillance Camera",
+      "map": 0.6297552255225524
+    },
+    "33": {
+      "name": "No Right Turn",
+      "map": 0.7576293251350037
+    },
+    "34": {
+      "name": "Double curve first to right",
+      "map": 0.4765676567656766
+    },
+    "35": {
+      "name": "No Containers Allowed",
+      "map": 0.7536109764822636
+    },
+    "36": {
+      "name": "No Left or Right Turn",
+      "map": 0.8252548111954053
+    },
+    "37": {
+      "name": "No Straight and Right Turn",
+      "map": 0.7217821782178218
+    },
+    "38": {
+      "name": "Intersection with T-Junction",
+      "map": 0.6996699669966996
+    },
+    "39": {
+      "name": "Speed limit (50km/h)",
+      "map": 0.7526496593125375
+    },
+    "40": {
+      "name": "Speed limit (60km/h)",
+      "map": 0.7955541417309051
+    },
+    "41": {
+      "name": "Speed limit (80km/h)",
+      "map": 0.7846392835254222
+    },
+    "42": {
+      "name": "Speed limit (40km/h)",
+      "map": 0.664053602241167
+    },
+    "43": {
+      "name": "Left Turn",
+      "map": 0.7757425742574258
+    },
+    "44": {
+      "name": "Low Clearance",
+      "map": 0.742450495049505
+    },
+    "45": {
+      "name": "Other Danger",
+      "map": 0.0
+    },
+    "46": {
+      "name": "One-way street",
+      "map": 0.7393955470511845
+    },
+    "47": {
+      "name": "No Parking",
+      "map": 0.7763053832817354
+    },
+    "48": {
+      "name": "No U-Turn for Cars",
+      "map": 0.7212871287128713
+    },
+    "49": {
+      "name": "Level Crossing with Barriers",
+      "map": 0.8598019801980198
+    },
+    "50": {
+      "name": "No U-Turn and No Left Turn",
+      "map": 0.7168512982768868
+    },
+    "51": {
+      "name": "Danger zone on the right",
+      "map": 0.7209103677319341
+    },
+    "52": {
+      "name": "Warning: Obstacle ahead – pass on the right",
+      "map": 0.7999999999999999
+    }
+  },
+  "split": "test",
+  "selected_epoch": 36,
+  "checkpoint_sha256": "558cc5364a6001b2e6008db6b9b28e7ebd9c6a1f62a36ab257900b0912d15686",
+  "dataset_sha256": "27293967ac55863ac998723f5af6cacad8afeac0ee6db4bfba9ab86b3aa6319b",
+  "checkpoint_selection": "max validation COCO AP",
+  "track": "historical"
+}
