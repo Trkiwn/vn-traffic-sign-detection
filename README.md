@@ -5,7 +5,6 @@ Final project by Group 5 for the Introduction to Computer Science course
 
 ## At a glance
 
-| | |
 |---|---|
 | Task | Object detection of 52 Vietnamese traffic-sign classes (COCO bounding boxes) |
 | Models | RT-DETR R50vd, Faster R-CNN (ResNet-50 FPN v2) and YOLO11s are trained and evaluated |
