@@ -8,17 +8,17 @@ Final project by Group 5 for the Introduction to Computer Science course
 | | |
 |---|---|
 | Task | Object detection of 52 Vietnamese traffic-sign classes (COCO bounding boxes) |
-| Models | RT-DETR R50vd and Faster R-CNN (ResNet-50 FPN v2) are trained and evaluated; YOLO11s is in progress |
-| Shared protocol | Same train/validation/test split, 640 x 640 input, 50 epochs, COCO-pretrained weights, `pycocotools` COCO evaluation |
-| Main result | On the test split, RT-DETR reaches mAP@[.50:.95] 0.757 versus 0.681 for Faster R-CNN |
+| Models | RT-DETR R50vd, Faster R-CNN (ResNet-50 FPN v2) and YOLO11s are trained and evaluated |
+| Shared protocol | Same train/validation/test split, 640 x 640 stretched input, no augmentation, 50 epochs, COCO-pretrained weights, minimum validation-loss checkpoint selection, `pycocotools` COCO evaluation (YOLO11s differences are listed in Section 4) |
+| Main result | On the test split, RT-DETR reaches mAP@[.50:.95] 0.757, versus 0.703 for YOLO11s and 0.695 for Faster R-CNN |
 | How to read it | Scores measure performance on held-out frames from the collected scenes (see Section 6) |
 
 ## 1. Introduction
 
 This project compares object-detection models on Vietnamese traffic-sign
 images under a shared dataset, training/validation protocol, and COCO
-evaluation. The RT-DETR and Faster R-CNN pipelines are complete. YOLO11s is
-the next model to be added. Deployment-oriented measurements (latency, FPS,
+evaluation. All three pipelines (RT-DETR, Faster R-CNN and YOLO11s) are
+complete. Deployment-oriented measurements (latency, FPS,
 parameter count, model size) are planned for a follow-up stage under
 controlled hardware settings, so that accuracy and speed can be discussed
 together.
@@ -36,12 +36,16 @@ validated driving system.
 ## 2. Dataset
 
 The project uses the
-[Vietnamese Traffic Signs dataset on Kaggle](https://www.kaggle.com/datasets/maitam/vietnamese-traffic-signs).
-The archive contains 3,216 images with 8,334 bounding boxes in 52 classes,
-mostly identified by QCVN sign codes. The prepared dataset provides the same
-52 categories in COCO format.
+[Vietnam Road Signs Dataset (VNTS) on Kaggle](https://www.kaggle.com/datasets/maitam/vietnamese-traffic-signs).
+The archive (Kaggle version 8) contains 3,216 JPEG images (960 x 540: 2,364;
+1,920 x 1,080: 813; 540 x 960: 39) with 8,334 bounding boxes in 52 classes.
+Class names are read from the archive's `classes_en.txt`. The prepared dataset
+provides the same 52 categories in COCO format.
 
-<!-- TODO(confirm): dataset licence and attribution requirements from the Kaggle page. -->
+The Vietnam Road Signs Dataset (VNTS) is used under the
+[Creative Commons Attribution-ShareAlike 4.0 International (CC-BY-SA 4.0)](https://creativecommons.org/licenses/by-sa/4.0/)
+license. It was created and collected by the Data Palpating Team.
+Source: [Kaggle VNTS dataset](https://www.kaggle.com/datasets/maitam/vietnamese-traffic-signs).
 
 The prepared split statistics are:
 
@@ -57,19 +61,31 @@ The three splits contain 3,191 images in total. The remaining 25 of the 3,216
 archive images appear in neither provided list and have empty label files;
 they are not used.
 
-<!-- TODO(confirm): how the validation images were selected from the training list (random, stratified, or grouped by scene), and whether val/train class distributions were compared. -->
+The validation images are chosen by `scripts/preprocessing/preprocessing.py`.
+It takes 10% of the provided training list (255 of 2,552 images, seed 42) and
+selects them greedily so that each class contributes about 10% of its images
+(at least one) to validation. Images that contain still-under-represented
+classes are preferred, and every class keeps at least one training image. The
+selection is class-aware but not scene-aware: neighbouring frames of a
+validation image can remain in the training set. This is adequate for choosing
+checkpoints. Validation images have a different mix from the test set (denser
+and enriched in rare classes), and neighbouring frames can remain in training.
 
 Dataset properties that matter for interpreting the results:
 
 - **Class imbalance.** Classes range from 3 to 1,071 boxes. Aggregate mAP is
   dominated by the common classes, so per-class results are reported
   separately (Section 6.3).
-- **Small objects.** In the dataset audit, 41.5% of boxes are smaller than
-  16 px at 640 px input (18.6% at 960 px). `AP small` is therefore an
-  informative metric for this dataset.
+- **Small objects.** In the dataset audit, 46.7% of boxes are COCO "small" at
+  original resolution, and 41.5% are smaller than 16 px when the longer image
+  side is scaled to 640 px (18.6% at 960 px). The stretched 640 x 640 input used
+  here enlarges boxes somewhat relative to that scaling, so 41.5% is an upper
+  bound for the models' input. `AP small` is therefore an informative metric
+  for this dataset.
 - **Validation density.** Validation images contain more boxes per image
-  (4.12) than train (2.45) or test (2.57). Validation is used only for
-  checkpoint selection.
+  (4.12) than train (2.45) or test (2.57), which is consistent with the
+  preference for images containing several under-represented classes
+  described above. Validation is used only for checkpoint selection.
 
 ## 3. Dataset preprocessing
 
@@ -97,36 +113,16 @@ The prepared files are:
 The generated YOLO configuration omits a machine-specific dataset root.
 Ultralytics resolves its relative split paths from the configuration file's
 directory, so the file can be used after moving `model_ready/` to another
-machine or runtime.
+machine or runtime. (The file is written in JSON syntax, which is valid YAML.)
 
-### Annotation coverage limitation
+The preprocessing script checks every label line (class range, finite and
+positive box sizes), clips boxes to the image bounds and reports how many were
+clipped, and writes no output if it finds any dataset issue. It builds the
+prepared directory in a temporary location and moves it into place only on
+success. COCO category IDs are 1-based (1-52), YOLO class IDs stay 0-based, and
+image IDs restart at 1 within each split.
 
-The original dataset annotations supplied by the dataset author do not
-necessarily label every visually noticeable sign in an image. For example,
-`1671.jpg` contains several signs in the background, but its source COCO
-annotation contains only one labelled object. This is a limitation of the
-source dataset, not an error introduced by this project's preprocessing.
-
-Consequently, a qualitative image may show visible signs that are absent from
-the ground truth. Those signs cannot be counted as missed detections by COCO
-evaluation; however, predictions on unannotated signs may be counted as false
-positives. Qualitative predictions must therefore be compared with the
-provided annotations, while model quality should be judged primarily using
-metrics computed across the complete split.
-
-## Current status
-
-- Dataset import and preprocessing: complete.
-- RT-DETR training and COCO evaluation: complete.
-- Faster R-CNN training and COCO evaluation: complete.
-- Shared training/validation loss plotting: complete.
-- Single-image prediction and visualization for RT-DETR: complete.
-- Single-image prediction and visualization for Faster R-CNN: complete.
-- YOLO11s training (50 epochs), offline minimum-validation-loss checkpoint
-  selection, and retrospective COCO test evaluation: complete.
-- Parameter, model-size, and latency/FPS comparison: pending.
-
-## Installation
+### Installation
 
 Use the Python version and dependency versions appropriate for the target
 environment, then install the repository dependencies:
@@ -145,13 +141,21 @@ pip3 install torch torchvision --index-url https://download.pytorch.org/whl/cu13
 The dependency file documents the verified Kaggle environment separately from
 the platform-specific PyTorch installation.
 
-<!-- TODO(confirm): GPU model and count of the Kaggle runs, and the commit hash used for the reported results. -->
+The RT-DETR and Faster R-CNN runs used Kaggle with two NVIDIA Tesla T4 GPUs.
+RT-DETR training installed `transformers==5.20.2`, `accelerate==1.15.0`,
+`torchmetrics==1.9.0`, `trackio==0.43.0` and `pycocotools==2.0.11` with pip at
+the start of the notebook, and the checkpoint metadata records Transformers
+5.20.2. An environment check on 12 November 2026 reported PyTorch 2.11.0+cu128,
+torchvision 0.26.0+cu128, CUDA 12.8, NumPy 2.1.3 and Pillow 13.0.0. The YOLO11s
+run used a single Colab GPU; its exact model is recorded in the
+`visible_cuda_devices` field of the saved YOLO11s JSON files. The reported
+results correspond to repository commit `41a3983`.
 
 ## 4. Methodology
 
 ### Common experimental protocol
 
-The completed RT-DETR and Faster R-CNN runs share:
+All three runs (RT-DETR, Faster R-CNN and YOLO11s) share:
 
 - Prepared train, validation, and test splits (the same annotation files)
 - 640 x 640 image processing (images are resized to a square, not letterboxed)
@@ -159,7 +163,8 @@ The completed RT-DETR and Faster R-CNN runs share:
 - COCO-pretrained starting weights with a new 52-class prediction head
 - Seed 42 (see the reproducibility notes below)
 - COCO bounding-box annotations
-- Validation loss for checkpoint selection
+- No data augmentation
+- Minimum validation loss for checkpoint selection (the loss definitions differ by model)
 - The provided test images for final reporting only
 
 Test images are not used to select checkpoints or tune thresholds. RT-DETR
@@ -167,22 +172,32 @@ training and validation do not access the test split; the explicit COCO
 evaluator is run on the test split only after the checkpoint is selected.
 Because the test set is defined by image membership in the source archive
 rather than by recording, it measures performance on held-out frames from the
-collected scenes (Section 6.1).
+collected scenes (Section 6.1). The YOLO11s result has one qualification, described
+in the YOLO11s section below.
 
-All three models use the *minimum validation-loss* checkpoint-selection
-principle, but their architecture-specific loss values cannot be compared
-numerically. Faster R-CNN records validation loss during training; the
-historical YOLO11s run saved all 50 checkpoints with `val=False`, so its
-validation loss was computed **offline afterward** using only the 255
-validation images. The YOLO11s min-loss test is **retrospective**, because an
-earlier max-validation-AP pilot had already evaluated the historical test split.
+All evaluators use `pycocotools.COCOeval` with `iouType="bbox"` and a score
+threshold of `0.001`, so low-confidence detections remain available to the COCO
+precision-recall calculation (this differs from the `0.5` default used for
+readable demo visualizations).
 
-All three model evaluations use `pycocotools.COCOeval` with `iouType="bbox"`. Evaluation
-uses a score threshold of `0.001` so low-confidence detections remain
-available to the COCO precision-recall calculation. This differs from the
-`0.5` default used for readable demo visualizations.
+For RT-DETR, the evaluator rescales boxes to the original image size, clips
+them to the image, converts them to COCO `[x, y, width, height]`, and maps
+labels to COCO category IDs 1-52 (label + 1). The model returns up to 300
+detections per image, and `COCOeval` uses its default maximum of 100 per image
+for AP and `AR@100`. All evaluators write metrics under the same names.
+YOLO11s predictions are generated in the Colab notebook, mapped back to
+original image coordinates, and scored with the same `COCOeval` settings;
+`replay_coco.py` re-scores the archived predictions.
 
-<!-- TODO(confirm, from the evaluator scripts): predictions are mapped back to original image coordinates before COCOeval for both models; category IDs are mapped to COCO IDs 1-52 for both models; maxDets setting. -->
+For Faster R-CNN, the exporter maps boxes from the 640 x 640 network input
+back to original image coordinates and uses labels 1-52 directly as COCO
+category IDs; torchvision clips boxes to the image. The exporter sets the
+detector's internal score threshold (`model.roi_heads.score_thresh`, default
+0.05) to the requested `0.001`, so the models are scored at the same
+threshold. Non-maximum suppression at IoU 0.5 and a maximum of 100 detections
+per image remain at torchvision defaults. An earlier evaluation without this
+setting was effectively scored at 0.05 and gave a lower test mAP@[.50:.95]
+(0.681), which is why the setting is documented.
 
 Reported metrics are:
 
@@ -196,24 +211,23 @@ Reported metrics are:
 
 ### Training configurations
 
-| | RT-DETR R50vd | Faster R-CNN | YOLO11s (planned) |
+| | RT-DETR R50vd | Faster R-CNN | YOLO11s |
 |---|---|---|---|
-| Library | Hugging Face Transformers | torchvision | Ultralytics |
+| Library | Hugging Face Transformers | torchvision | Ultralytics 8.4.189 |
 | Starting weights | `PekingU/rtdetr_r50vd` (COCO) | `FasterRCNN_ResNet50_FPN_V2_Weights.DEFAULT` (COCO) | COCO-pretrained `yolo11s.pt` |
-| Prediction head | Re-initialised for 52 labels (0-51, no background) | Replaced: 53 outputs (background + 52) | Built by Ultralytics for 52 classes |
-| Input | Resize to 640 x 640 (`RTDetrImageProcessor`) | Resize to 640 x 640; boxes scaled to match | Letterbox to 640 (Ultralytics default) |
-| Augmentation | None in the training script | None in the training script | To be set explicitly (see below) |
-| Optimizer | Trainer default (AdamW), lr `5e-5`, weight decay `1e-4` | SGD, lr `0.005`, momentum `0.9`, weight decay `5e-4` | To be documented |
-| LR schedule | Trainer default linear decay, 100 warm-up steps | Step x0.1 at epochs 30 and 40, no warm-up | To be documented |
-| Batch | 2 per device x accumulation 2 (8 on two GPUs) | 2 per device x accumulation 2 (8 on two GPUs) | To be documented |
+| Prediction head | Re-initialised for 52 labels (0-51, no background) | Replaced: 53 outputs (background + 52) | Rebuilt for 52 classes (the initializer has 80) |
+| Input | Resize to 640 x 640 (`RTDetrImageProcessor`, bilinear by default) | Resize to 640 x 640 (PIL, bicubic); boxes scaled to match | Images pre-resized to 640 x 640 (bicubic, stretched); `rect=False`, no padding |
+| Augmentation | None | None | None (mosaic, mixup, flips, HSV and geometric augmentation all set to 0) |
+| Optimizer | Trainer default (AdamW), lr `5e-5`, weight decay `1e-4` | SGD, lr `0.005`, momentum `0.9`, weight decay `5e-4` | AdamW, lr `0.000179` (the value Ultralytics' `optimizer=auto` computes for 52 classes), weight decay `5e-4` |
+| LR schedule | Trainer default linear decay, 100 warm-up steps | Step x0.1 at epochs 30 and 40, no warm-up | Ultralytics defaults (3 warm-up epochs, linear decay to 1% of the initial rate) |
+| Batch | 2 per device x accumulation 2 (8 on two GPUs) | 2 per device x accumulation 2 (8 on two GPUs) | 8 on one GPU |
 | Precision | FP16 | Mixed precision (AMP, FP16) | AMP |
 | Epochs | 50 | 50 | 50 |
-| Checkpoint rule | Lowest validation loss, evaluated every epoch | Lowest validation loss, evaluated every epoch | To be documented |
+| Training platform | Kaggle (2 x T4) | Kaggle (2 x T4) | Google Colab |
+| Checkpoint rule | Lowest validation loss, evaluated every epoch during training | Lowest validation loss, evaluated every epoch during training | Lowest validation loss, computed offline over the 50 saved checkpoints (epoch 37) |
 
 Each model was trained with one configuration; no per-model hyperparameter
 search is reported.
-
-<!-- TODO(confirm): that no hyperparameter search was run for either model. -->
 
 ### Implementation notes
 
@@ -229,37 +243,69 @@ search is reported.
 - **Seeds and determinism.** RT-DETR sets `seed` and `data_seed` to 42.
   Faster R-CNN seeds Python, NumPy and PyTorch with 42 plus the process rank.
   cuDNN determinism is not enforced, so repeated runs can differ slightly.
-- **Loss definitions.** RT-DETR's validation loss comes from Hugging Face's
-  set-matching objective, and Faster R-CNN's is the sum of its four torchvision
-  loss terms. Both are used for within-model checkpoint selection only; their
-  values are not comparable between models.
+- **Loss definitions.** RT-DETR's validation loss is Hugging Face's
+  Hungarian-matching objective (classification, L1 and GIoU box terms with
+  weights 1, 5 and 2, plus auxiliary losses from the decoder layers),
+  Faster R-CNN's is the sum of its four torchvision loss terms, and YOLO11s's is
+  the sum of its gain-weighted box, classification and DFL terms. They are used
+  for within-model checkpoint selection only; their values are not comparable
+  between models.
+- **Normalization and versions.** RT-DETR freezes its backbone batch-norm
+  layers (`freeze_backbone_batch_norms`), whereas torchvision's
+  `fasterrcnn_resnet50_fpn_v2` trains its batch-norm layers, here with 2 images
+  per GPU. This recipe difference may affect Faster R-CNN's results and is not
+  controlled in this comparison. The saved RT-DETR checkpoint metadata records
+  Transformers 5.20.2; other versions are in `requirements.txt`.
 - **Faster R-CNN validation mode.** torchvision detectors return losses only
   in training mode, so validation loss is computed under `model.train()` with
   gradients disabled. This also leaves normalization layers in training
   mode: batch statistics are used and running statistics are updated on
-  validation images. The effect is expected to be small. The planned
-  retraining (Section 6.3) switches these layers to evaluation mode during
-  validation.
+  validation images. The effect is expected to be small, and the reported run
+  keeps this behaviour. Setting these layers to evaluation mode during
+  validation is a listed refinement (Section 6.3).
 - **Checkpoint retention.** RT-DETR keeps the best checkpoint plus the most
   recent ones (`save_total_limit=3`). Faster R-CNN saves `best.pt` and a
   checkpoint every five epochs.
 
-### YOLO11s protocol (planned)
+### YOLO11s run and differences from the other two models
 
-To keep YOLO11s comparable with the other two models, the plan is to:
+YOLO11s was trained with Ultralytics 8.4.189 on the same prepared split
+(identical image bytes and annotations) with the settings in the table above.
+The images were resized once to 640 x 640 (bicubic) and used as the YOLO inputs
+for training, loss computation and inference, so the geometry matches Faster
+R-CNN's stretched resize. Horizontal flipping and all other augmentation were
+disabled. The class list contains mirror-image pairs (for example No Left Turn
+and No Right Turn, see Appendix A), so mirroring would change the label of a
+sign.
 
-- Use the same prepared split through `data.yaml`, the same 640-pixel input
-  size, the same 50-epoch budget, seed 42, and COCO-pretrained weights.
-- Set augmentation explicitly and record it in the table above. Ultralytics
-  enables mosaic, colour jitter and horizontal flipping by default. Mirroring
-  can change the meaning of direction-dependent signs, so horizontal flipping
-  will be disabled.
-- Export predictions at score threshold `0.001` in COCO format and score them
-  with the same `COCOeval` script, because Ultralytics' built-in mAP is
-  computed slightly differently.
-- Report the checkpoint-selection rule used (Ultralytics selects `best.pt` by
-  a validation mAP-based fitness score, whereas the other two use validation
-  loss).
+The YOLO11s run differs from the other two in these ways:
+
+- **Checkpoint selection.** Validation was switched off during training
+  (`val=False`) and all 50 epoch checkpoints were saved. The validation loss
+  (box, classification and DFL terms, with the gains stored in each checkpoint)
+  was then computed offline for every checkpoint on the 255 validation images,
+  with the model in evaluation mode (32 batches of 8). The minimum, at epoch 37
+  (`epoch36.pt` in Ultralytics' zero-based file naming), was 2.315651791 and was
+  selected, with the earlier epoch winning ties. The other two models record validation loss during training,
+  and the three loss definitions are not comparable with each other.
+- **Retrospective test result.** The YOLO11s test set was scored once before
+  this final rule was fixed. An earlier pilot selected a checkpoint by
+  validation COCO AP (epoch 36, `epoch35.pt`) and scored mAP@[.50:.95] 0.7033
+  on the test set; the checkpoint was then re-selected by minimum validation
+  loss, to match the other two models, and scored 0.7032. The final selection
+  uses validation data only, and the two scores differ by 0.0002, so the choice
+  of rule has no practical effect here. The YOLO11s test result is still
+  retrospective, because the test set had been viewed before the final rule was
+  applied. Both runs are archived separately.
+- **Inference settings.** Predictions use score threshold 0.001, NMS at IoU 0.7
+  and at most 100 detections per image. Ultralytics' prediction mode keeps one
+  class per candidate box, whereas the other two models can return several
+  class hypotheses for the same box, and YOLO11s returned 2,461 test detections
+  (about 3.9 per image; 638 of 639 images have at least one) against 20,126 for Faster R-CNN. This may lower
+  YOLO11s's recall-oriented metrics, such as mAP@.50. A re-run with multi-label
+  NMS is listed in Section 6.3.
+- **Platform.** YOLO11s was trained on Google Colab with one GPU (effective
+  batch size 8), and the other two on Kaggle.
 
 ### RT-DETR
 
@@ -289,8 +335,10 @@ with compatible training arguments.
 
 #### Evaluation
 
-When an output directory is supplied, the evaluator selects the checkpoint
-with the lowest recorded validation loss:
+When a training output directory is supplied, the evaluator uses the best
+model saved there at the end of training (lowest validation loss). If no saved
+model is present, it scans the checkpoint directories for the lowest recorded
+validation loss:
 
 ```bash
 python scripts/DETR/evaluate/evaluation.py --split validation
@@ -311,7 +359,7 @@ Predictions and metrics are written below the evaluated checkpoint's
 
 #### Single-image visualization
 
-Print detections as JSON:
+Write detections as JSON (by default to `outputs/predictions/rtdetr/<image>.json`; override with `--output`). Labels are 0-based class indices, so the COCO category ID is the label plus one:
 
 ```bash
 python scripts/DETR/models/predict.py \
@@ -367,11 +415,13 @@ selection are restored from that checkpoint. The script refuses to resume
 when the output history is newer than the chosen checkpoint. Do not resume
 after changing the model, optimizer, batch configuration, or training budget.
 
-The recorded Faster R-CNN results were produced before the final partial
-gradient-accumulation group was scaled correctly. The correction affects one
-optimizer update per epoch when the number of batches is odd. The planned
-retraining (Section 6.3) regenerates the results with the corrected
-implementation.
+The reported Faster R-CNN run was trained before the final partial
+gradient-accumulation group was scaled correctly; the scripts in this
+repository contain the correction. The affected update is the last one of an
+epoch when the number of batches is odd (about 1 of 288 updates per epoch on
+two GPUs, roughly 0.35%), and its gradient was scaled by half. This is not
+expected to change the comparison, and the run was not repeated: the reported
+numbers come from the original run.
 
 #### Evaluation
 
@@ -388,7 +438,10 @@ python "scripts/Faster R-CNN/evaluate/evaluate_rcnn.py" \
 ```
 
 The evaluator exports COCO-format predictions and applies the same
-`pycocotools.COCOeval` metrics used by RT-DETR.
+`pycocotools.COCOeval` metrics used by RT-DETR. Predictions come from
+`predict_rcnn.py` (in the training-script folder), and predictions and metrics
+are written next to the checkpoint as `<split>_predictions.json` and
+`<split>_metrics.json`.
 
 #### Single-image visualization
 
@@ -403,111 +456,69 @@ python "scripts/Faster R-CNN/visualisation/visualise_rcnn.py" \
 If `--output` is omitted, the image is saved under
 `outputs/predictions/faster_rcnn/`.
 
-## YOLO11s
+### YOLO11s
 
-### Training
+#### Training and checkpoint selection
 
-YOLO11s uses an Ultralytics `yolo11s.pt` COCO-pretrained initializer and the
-same prepared 52-class train/validation/test split. The historical run was
-trained on a single Colab GPU for **50 epochs**, with **640 x 640** image
-processing, batch size **8**, seed **42**, AdamW (`lr0=0.000179`,
-`weight_decay=0.0005`), FP16 automatic mixed precision, and disabled spatial
-and color augmentation. Images were stretched to 640 x 640 using RGB bicubic
-interpolation instead of letterbox padding.
+YOLO11s is trained and selected in the Colab notebook
+[`scripts/YOLO11s/models/VGU_YOLO11s_MinValLoss_GitHub_Ready.ipynb`](scripts/YOLO11s/models/VGU_YOLO11s_MinValLoss_GitHub_Ready.ipynb);
+there is no standalone `train.py`. Open it in Google Colab with a GPU runtime and
+set its first code cell. The notebook has three modes: `review` (default;
+displays the archived results, no GPU or Drive needed), `select` (re-verifies
+the saved checkpoints and recomputes the validation-loss selection without
+training) and `reproduce` (trains if checkpoints are missing; needs a GPU and the
+prepared dataset). For an entirely new run, set `MODE = "reproduce"`, a new
+`RUN_NAME` (do not overwrite the archived pilot), `DATASET` (the prepared
+`model_ready` directory) and `WEIGHTS` (the official `yolo11s.pt`). Do not
+retrain the historical experiment just to evaluate it.
 
-Unlike the RT-DETR and Faster R-CNN runs, YOLO11s was executed in Colab. Its
-training entrypoint is a versioned `.ipynb` file, not a standalone `train.py`.
-The source of the training, validation-loss selection, and test evaluation
-pipeline is the [YOLO11s Colab notebook](scripts/YOLO11s/models/VGU_YOLO11s_MinValLoss_GitHub_Ready.ipynb).
-Open the notebook in Google Colab, select a GPU runtime and configure its
-first code cell. For an **entirely new run** with your own prepared dataset and
-pretrained weights, use:
+The notebook pins `ultralytics==8.4.189` and `pycocotools==2.0.11`.
+`requirements.txt` documents the Kaggle environment and is not a bit-for-bit
+record of the Colab runtime.
 
-```python
-MODE = "reproduce"  # Can train; not required for the completed historical run
-RUN_NAME = "yolo11s_new_experiment"  # Do not overwrite the archived pilot
-DATASET = Path("/content/drive/MyDrive/model_ready")
-# WEIGHTS must point to the official pretrained yolo11s.pt on the runtime.
-```
+The repository holds the saved JSON evidence, not the model weights. The
+50-epoch checkpoint series is kept on the run owner's Google Drive
+(`VGU_TrafficSign_Project/yolo11s_colab_runs/yolo11s_colab_pilot_01/`). The
+selected checkpoint is `training/weights/epoch36.pt`, with SHA-256
+`05cf921fffd4c46df7b18ea8958c84e29bc228207a65590958c9d16cee42544c`. The
+methodology, results and limitations are written up in
+[docs/YOLO11s_EXPERIMENT_REPORT.md](docs/YOLO11s_EXPERIMENT_REPORT.md).
 
-**Do not retrain the historical experiment just to evaluate it.** The
-completed checkpoint series is retained separately on the run owner's Drive,
-under `VGU_TrafficSign_Project/yolo11s_colab_runs/yolo11s_colab_pilot_01/`.
-The repository package contains the saved JSON evidence, **not** the `.pt`
-model weights. The Colab setup is platform-specific; the Kaggle dependency
-versions in `requirements.txt` are not a bit-for-bit record of the Colab
-runtime. See [the YOLO11s report](docs/YOLO11s_EXPERIMENT_REPORT.md).
+#### Evaluation
 
-### Evaluation
-
-The original YOLO11s pilot selected the checkpoint with the **maximum
-validation COCO AP**. To align its checkpoint-selection rule with RT-DETR and
-Faster R-CNN without retraining, all **50 saved checkpoints** were evaluated
-offline on **255 validation images (32 batches each)**. The three gain-weighted
-Ultralytics detection loss components (`box_loss`, `cls_loss`, `dfl_loss`)
-were averaged per batch and summed. The checkpoint with the **lowest total
-validation loss** was selected, with earliest-epoch tie-breaking:
-
-- **Selected epoch:** 37/50 (`training/weights/epoch36.pt`, zero-based file numbering).
-- **Minimum validation loss:** `2.315651791`.
-- **Checkpoint SHA-256:** `05cf921fffd4c46df7b18ea8958c84e29bc228207a65590958c9d16cee42544c`.
-
-On the original Colab GPU runtime, `MODE="select"` checks the saved 50-epoch
-run and uses/recomputes the offline selection without retraining:
-
-```python
-MODE = "select"  # Read existing checkpoints; no model.train() call
-```
-
-The selected checkpoint was then evaluated once on the historical test set
-using COCO bounding-box metrics (`conf=0.001`, NMS IoU `0.7`, up to 100
-detections per image). Inference boxes are mapped back from 640 x 640 to the
-original image coordinates. The main recorded result is
-**mAP@[.50:.95] = 0.703166680** on 639 images, with 2,461 COCO predictions.
-
-To recompute **COCOeval from the saved predictions** on a machine with the
-prepared dataset, run these commands from the repository root:
+The archived test predictions can be re-scored on any machine, without a GPU or
+the weights:
 
 ```bash
 python -m pip install pycocotools==2.0.11
 python scripts/YOLO11s/evaluate/replay_coco.py --split test
 ```
 
-This replay needs neither GPU nor weights. The saved artifacts are under
-`results/YOLO11s/min_val_loss/`. The original max-AP-selected pilot is
-preserved under `results/YOLO11s/max_val_ap_pilot/`; those pilot metrics
-**must not** be substituted for the min-loss-selected test results.
+The script recomputes the COCO metrics from
+`results/YOLO11s/min_val_loss/test_predictions.json` and checks them against the
+recorded `test_metrics.json` (tolerance 1e-8). Adding `--track max_val_ap_pilot`
+replays the earlier pilot instead; the pilot metrics must not be substituted for
+the minimum-validation-loss results.
 
-### Single-image visualization
-
-The repository provides a lightweight image demo with the same 640 x 640
-stretching and original-image box-coordinate conversion as the Colab run.
-**Download the selected 52-class `epoch36.pt` checkpoint from the run owner
-first**; it is not included in GitHub.
-
-Print the model's detections as JSON (0.5 is a *display* threshold):
+#### Loss plot and single-image visualization
 
 ```bash
+python scripts/YOLO11s/visualisation/plot_val_loss.py
+
 python scripts/YOLO11s/visualisation/visualise_yolo11s.py \
   --image path/to/image.jpg \
-  --checkpoint path/to/epoch36.pt \
-  --threshold 0.5
-```
-
-Create an annotated image while also printing the JSON detections:
-
-```bash
-python scripts/YOLO11s/visualisation/visualise_yolo11s.py \
-  --image path/to/image.jpg \
-  --checkpoint path/to/epoch36.pt \
+  --checkpoint /path/to/epoch36.pt \
   --threshold 0.5 \
   --output outputs/predictions/yolo11s/image_detected.png
 ```
 
-The 0.5 demo threshold is not used for COCO evaluation, which retains
-predictions down to confidence 0.001.
+The YOLO11s plot shows validation loss only, because validation was switched off
+during training and the loss history was computed afterwards. The visualization
+script reproduces the 640 x 640 stretched input and is a demo, not an evaluator.
+It needs the `epoch36.pt` weights, which are not in the repository; without
+`--output` it only prints the detections as JSON.
 
-## Loss visualization and checkpoint interpretation
+### Loss visualization and checkpoint selection
 
 RT-DETR and Faster R-CNN use the same plotting script:
 
@@ -527,77 +538,21 @@ The script reads RT-DETR `trainer_state.json` or Faster R-CNN
 `training_history.json`, plots training and validation loss, and marks the
 lowest validation-loss epoch.
 
-YOLO11s has a separate **offline validation-loss history** because its
-historical training used `val=False`; there is no per-epoch training-time
-validation-loss curve. Plot the 50 retrospectively computed validation losses
-and mark their minimum using:
+RT-DETR's validation loss reached its recorded minimum at epoch 15 and
+generally increased afterwards while training loss continued to fall.
+Faster R-CNN's validation loss reached `0.2639` at epoch 22 and then mostly
+plateaued around `0.27` while training loss continued to decrease. Both
+patterns indicate that the models stopped improving on held-out loss after
+the selected epoch, which is why the validation-selected checkpoints are used
+for reporting. Later checkpoints are not necessarily worse on detection
+metrics; Section 6.3 describes selecting checkpoints by validation mAP as a
+refinement.
 
-```bash
-python scripts/YOLO11s/visualisation/plot_val_loss.py \
-  --history results/YOLO11s/min_val_loss/val_loss_history.json \
-  --output outputs/plots/yolo11s_validation_loss.png
-```
+Loss is used for checkpoint selection, and COCO mAP is the reporting metric.
+mAP evaluates post-processed detections at multiple IoU thresholds, so the two
+are related but not interchangeable.
 
-The minimum was at epoch **37** (total loss `2.315651791`). It is not
-meaningful to compare absolute YOLO11s loss values to those of RT-DETR or
-Faster R-CNN because the architectures optimize different objectives.
-
-For RT-DETR, validation loss reached its recorded minimum at epoch 15 and
-then generally increased while training loss continued to fall. For Faster
-R-CNN, validation loss reached `0.2639` at epoch 22, then mostly plateaued
-around `0.27` while training loss continued to decrease. These patterns are
-evidence of loss-based overfitting or convergence after the selected point,
-not proof that every later prediction is incorrect.
-
-The curves are useful for checkpoint selection, but loss is not the final
-detection metric. Faster R-CNN's validation loss is a sum of model
-classification/regression losses, while COCO mAP evaluates post-processed
-detections at multiple IoU thresholds. They measure related but different
-properties. The overfitting signal is therefore reported as a limitation,
-while the validation-selected checkpoint remains suitable for comparison
-because it avoids choosing the final model solely because its training loss is
-lower.
-
-## Results
-
-The table reports historical test-set COCO results only. Validation data was
-used for checkpoint selection, but validation performance is omitted from the
-reported comparison.
-
-| Model | mAP@[.50:.95] | mAP@.50 | mAP@.75 | AP small | AP medium | AP large | AR@100 |
-|---|---:|---:|---:|---:|---:|---:|---:|
-| RT-DETR R50vd | 0.757 | 0.973 | 0.917 | 0.695 | 0.801 | 0.891 | 0.816 |
-| Faster R-CNN | 0.681 | 0.936 | 0.845 | 0.667 | 0.724 | 0.812 | 0.731 |
-| YOLO11s | 0.703 | 0.924 | 0.840 | 0.687 | 0.751 | 0.843 | 0.749 |
-
-### Evidence-based interpretation
-
-RT-DETR has the higher recorded test `mAP@[.50:.95]` than Faster R-CNN
-(`0.757` versus `0.681`), a difference of `0.076`. It also has higher test
-`AR@100` (`0.816` versus `0.731`), a difference of `0.085`. These metrics
-support the limited conclusion that RT-DETR was the stronger accuracy model
-among the recorded runs under this historical protocol. YOLO11s ranked second
-by recorded mAP@[.50:.95] (`0.703167`), between RT-DETR (`0.757`) and
-Faster R-CNN (`0.681`). The YOLO11s result uses epoch 37 selected via
-minimum offline validation loss, not epoch 36 from the earlier max-AP pilot.
-
-Faster R-CNN's test `mAP@[.50:.95]` was `0.681`, `mAP@.50` was `0.936`, and
-`AR@100` was `0.731`. Its loss curve supports choosing the validation-selected
-`best.pt` checkpoint rather than the final checkpoint; it does not by itself
-mean training failed. No claim about real-time suitability is made until
-latency, FPS, parameter count, and model size are measured.
-
-The test results are descriptive of this historical split and should not
-be used to tune the models. Earlier dataset audits identified possible
-train/test near-scene overlap, and the YOLO11s min-loss criterion was applied
-after the test had already been inspected under a different rule. Therefore,
-these figures do **not** establish a leakage-free, prospective benchmark;
-a scene-disjoint split and retraining of all three models would be required
-for stronger confirmation. The source annotation limitation also means that
-COCO metrics measure performance on labelled objects, not every sign visible
-to a human viewer.
-
-## Repository layout
+### Project structure and dependencies
 
 ```text
 scripts/
@@ -610,48 +565,82 @@ scripts/
     evaluate/                     # Faster R-CNN COCO evaluation
     visualisation/                # Faster R-CNN image visualization
   YOLO11s/
-    models/                       # Colab training, selection and test notebook
-    evaluate/                     # COCOeval replay from saved predictions (no GPU)
-    visualisation/                # Single-image demo and validation-loss plot
-  preprocessing/                  # Prepare COCO and YOLO dataset files
+    models/                       # Colab notebook: training, selection and test evaluation
+    evaluate/                     # Replay and verify archived COCO evaluation
+    visualisation/                # Validation-loss plot and image visualization
+  preprocessing/                  # Prepare COCO and YOLO dataset files; dataset_audit.ipynb
   visual_plot/                    # Shared training/validation loss plots
   data/                           # Dataset download/import
 dataset/
   archive/                        # Downloaded source dataset
   model_ready/                    # Prepared images and annotations
 outputs/                          # Training, evaluation, prediction, and plot outputs
-results/YOLO11s/
-  min_val_loss/                   # Main retrospective results, including predictions
-  max_val_ap_pilot/               # Original pilot retained for provenance
+results/
+  YOLO11s/
+    min_val_loss/                 # Reported run: predictions, metrics, loss history
+    max_val_ap_pilot/             # Earlier pilot (checkpoint chosen by validation AP)
+    summary.json                  # Selection and result summary for the YOLO11s run
 docs/
-  YOLO11s_EXPERIMENT_REPORT.md   # Methodology, results and limitations
+  YOLO11s_EXPERIMENT_REPORT.md    # YOLO11s methodology, results and limitations
+tests/                            # YOLO11s artifact and repository-structure tests
 requirements.txt
 ```
 
 See [requirements.txt](./requirements.txt) for project dependencies. PyTorch
 and torchvision wheels remain platform- and CUDA-specific.
 
+### Tests
+
+The `tests/` folder checks the archived YOLO11s evidence and the repository
+layout. From the repository root:
+
+```bash
+python -m unittest discover -s tests -v
+```
+
+The tests use only the standard library and need no GPU or weights.
+`test_yolo11s_artifacts.py` verifies the provenance of the YOLO11s result files:
+50 consecutive epochs, 255 validation images in 32 batches per epoch,
+consistent checkpoint hashes, the minimum validation loss at epoch 37, 639
+evaluated test images, 2,461 well-formed predictions (638 images have at least
+one; one test image has none above the score floor), and that the earlier pilot
+is preserved. `test_yolo11s_structure.py` checks that the YOLO11s entry points
+exist, that `replay_coco.py` resolves the repository root, and that this README
+names the correct paths.
+
 ## 5. Results and evaluation
 
 The table reports test-set COCO results. Validation data was used for
-checkpoint selection. Validation-set metrics will be added alongside the test
-metrics in a later update.
+checkpoint selection only and is not part of the reported comparison.
 
 | Model | mAP@[.50:.95] | mAP@.50 | mAP@.75 | AP small | AP medium | AP large | AR@100 |
 |---|---:|---:|---:|---:|---:|---:|---:|
 | RT-DETR R50vd | 0.757 | 0.973 | 0.917 | 0.695 | 0.801 | 0.891 | 0.816 |
-| Faster R-CNN | 0.681 | 0.936 | 0.845 | 0.667 | 0.724 | 0.812 | 0.731 |
-| YOLO11s | In progress | - | - | - | - | - | - |
+| Faster R-CNN | 0.695 | 0.961 | 0.849 | 0.671 | 0.736 | 0.834 | 0.755 |
+| YOLO11s | 0.703 | 0.924 | 0.840 | 0.687 | 0.751 | 0.843 | 0.749 |
 
-Under this protocol, RT-DETR R50vd reached a higher test mAP@[.50:.95]
-(0.757 versus 0.681, +0.076) and AR@100 (0.816 versus 0.731, +0.085) than
-Faster R-CNN. Both models exceed 0.93 at IoU 0.50, so the stricter IoU
-thresholds separate them more clearly: the gap is +0.037 at mAP@.50 and +0.072
-at mAP@.75. The gap is also larger for medium and large signs (+0.077 and
-+0.079) than for small signs (+0.028). This pattern is consistent with
-RT-DETR producing more precisely localized boxes; the planned per-class and
-error analysis (Section 6.3) will test that explanation directly. AR@1 and
-AR@10 are available in the evaluation outputs.
+All rows are scored at score threshold 0.001 with validation-selected
+checkpoints (Section 4). The YOLO11s row is a retrospective result, and its
+selection and inference settings differ from the other two models (Section 4).
+
+Under this protocol, RT-DETR R50vd reached the highest test mAP@[.50:.95]
+(0.757), ahead of YOLO11s (0.703, -0.054) and Faster R-CNN (0.695, -0.062), and
+the highest AR@100 (0.816, versus 0.749 and 0.755). Against Faster R-CNN,
+RT-DETR's gap is +0.012 at IoU 0.50 and +0.068 at IoU 0.75, so the stricter
+thresholds are where they separate. By object size the gap to Faster R-CNN is
++0.024 for small signs, +0.065 for medium and +0.057 for large signs. This
+pattern is consistent with RT-DETR producing more precisely localized boxes; the
+planned per-class and error analysis (Section 6.3) will test that explanation
+directly.
+
+YOLO11s and Faster R-CNN are close, and their order depends on the metric.
+YOLO11s is higher on mAP@[.50:.95] (+0.008) and in all three size buckets,
+while Faster R-CNN is higher on mAP@.50 (0.961 versus 0.924), mAP@.75 and
+AR@100. Because mAP@[.50:.95] averages ten IoU thresholds, YOLO11s's boxes
+appear tighter at the highest IoUs while it finds fewer objects at IoU 0.50.
+Part of the lower mAP@.50 may come from its single-class-per-box inference
+(Section 4). Without repeated runs, this README makes no claim about the order of
+these two models. AR@1 and AR@10 are available in the evaluation outputs.
 
 The Faster R-CNN checkpoint used is the validation-selected `best.pt` (epoch
 22). Its loss curve supports choosing this checkpoint over the final one.
@@ -667,14 +656,15 @@ are measured under the controlled protocol in Section 6.3.
 The archive contains sequentially numbered frames extracted from recordings.
 It does not provide recording IDs or reliable timestamps. The provided train
 and test lists share no filenames, but frames from the same scenes appear on
-both sides. In the dataset audit, the share of test images with a near
-neighbour in the training set (perceptual-hash Hamming distance of at most 6)
-was 54.6%, close to the 56.2% share of training images with a near neighbour
-elsewhere in the training set. A manual review of 60 sampled train/test pairs
-at that distance judged all of them to be the same scene, and 232 near-duplicate
+both sides. In the dataset audit (`scripts/preprocessing/dataset_audit.ipynb`), the share of
+test images with a near neighbour in the training set (perceptual-hash Hamming
+distance of at most 6) was 54.6%, close to the 56.2% share of training images
+with a near neighbour elsewhere in the training set (57.2% when all training
+images are used as the reference). Of the 349 linked test images, 339 have
+consecutive-looking file names (same prefix, number gap of at most 5). A manual
+review of 60 sampled train/test pairs (20 each at distances 0-2, 3-4 and 5-6)
+judged all of them to be the same scene, and 232 of the 491 near-duplicate
 groups contain both train and test images.
-
-<!-- TODO(confirm): link the audit notebook / document that produced these figures. -->
 
 The reported scores therefore describe performance on held-out frames from the
 collected scenes. Every model is trained and tested on the same split, so the
@@ -685,9 +675,9 @@ here. The planned checks below measure how well these results carry over.
 
 **Planned checks, ordered by cost:**
 
-1. **Clean-test evaluation (no retraining).** Re-evaluate the completed models
-   on the subset of test images that have no near-duplicate in the training
-   set (290 of the 639 images at distance 6 in the YOLO data preparation). If
+1. **Clean-test evaluation (no retraining).** Re-score the saved test predictions of the
+   three models on the subset of test images that have no near-duplicate in the training
+   set (407 of the 639 at distance greater than 4, as in the audit's `split_v1.csv`; 290 at the stricter distance greater than 6, measured against all 2,552 provided training images). If
    the ranking and the gap persist on this subset, the comparison is robust to
    the frame-level leakage. The subset is smaller and may be harder, so it is
    reported next to the full test set, not instead of it.
@@ -696,12 +686,15 @@ here. The planned checks below measure how well these results carry over.
    Exact recording IDs are not required for this: merging too many images into
    one group only makes the split more conservative, so approximate grouping
    is a safe way to prevent leakage. If time allows, use the groups for a new
-   train/validation/test split.
+   train/validation/test split. A first version exists in the audit notebook
+   (`split_v1.csv`: near-duplicate groups within the training list at distance 4
+   and a group-aware validation cut of 426 images, leaving 2,126 for training);
+   the provided test set is unchanged there.
 3. **Independent test set.** Photograph or film a small set of new street
    scenes (about 100-200 images) and annotate only the 52 classes. This gives
    a test set that is independent by construction.
 4. **Uncertainty estimates.** Report bootstrap confidence intervals, resampling
-   blocks of consecutive frames and using the same resamples for both models,
+   blocks of consecutive frames and using the same resamples for all models,
    so that correlated neighbouring frames do not make the intervals too narrow.
 
 ### 6.2 Source annotations
@@ -714,8 +707,8 @@ detection of an unlabelled sign is counted as a false positive and measured
 precision can be understated, while an unlabelled sign cannot be counted as a
 miss.
 
-**Planned check:** review a sample of high-confidence false positives from both
-models, report how many correspond to genuine unlabelled signs, and report an
+**Planned check:** review a sample of high-confidence false positives from all
+three models, report how many correspond to genuine unlabelled signs, and report an
 annotation-adjusted precision next to the standard metrics. Qualitative
 predictions should be read alongside the provided annotations.
 
@@ -723,17 +716,19 @@ predictions should be read alongside the provided annotations.
 
 This project provides a reproducible pipeline for training and evaluating
 traffic-sign detectors under one shared protocol. On the current test split,
-RT-DETR R50vd reached higher mAP@[.50:.95] and AR@100 than Faster R-CNN (0.757
-versus 0.681 and 0.816 versus 0.731), with the largest advantage at stricter
-IoU thresholds. The results are reported together with their scope:
-evaluation is at frame level, the source annotations are incomplete for some
-images, and YOLO11s and the efficiency measurements are still to come. The
-planned clean-test, scene-group, and independent-test evaluations will show
-how well the findings carry over to unseen recordings.
+RT-DETR R50vd reached the highest mAP@[.50:.95] (0.757), ahead of YOLO11s (0.703)
+and Faster R-CNN (0.695), whose order depends on the metric; RT-DETR's advantage
+is largest at stricter IoU thresholds. The results are reported together with
+their scope: evaluation is at frame level, the YOLO11s result is retrospective
+and uses a different checkpoint-selection and inference setup, the source
+annotations are incomplete for some images, and the efficiency measurements are
+still to come. The planned clean-test, scene-group, and independent-test
+evaluations will show how well the findings carry over to unseen recordings.
 
 ## 8. References
 
-- Dataset: Vietnamese Traffic Signs, Kaggle (`maitam/vietnamese-traffic-signs`).
+- Dataset: Vietnam Road Signs Dataset (VNTS), Data Palpating Team, Kaggle
+  (`maitam/vietnamese-traffic-signs`), CC-BY-SA 4.0.
 - RT-DETR: Zhao et al., "DETRs Beat YOLOs on Real-time Object Detection",
   CVPR 2024.
 - Faster R-CNN: Ren et al., "Faster R-CNN: Towards Real-Time Object Detection
@@ -744,11 +739,11 @@ how well the findings carry over to unseen recordings.
   ECCV 2014, and `pycocotools`.
 
 ## Appendix A. Class list
- 
+
 Names come from the archive's `classes_en.txt`. The COCO category ID is
 the RT-DETR label plus one (Faster R-CNN uses the COCO ID directly as its
 label).
- 
+
 | COCO ID | Class |
 |---:|---|
 | 1 | Pedestrian Crossing |
@@ -803,7 +798,7 @@ label).
 | 50 | No U-Turn and No Left Turn |
 | 51 | Danger zone on the right |
 | 52 | Warning: Obstacle ahead – pass on the right |
- 
+
 Several classes form mirror-image pairs (for example No Left Turn / No Right
 Turn, Danger zone on the left / on the right, Narrow Road on the Left / on the
 Right, and No U-Turn and No Left Turn / No U-Turn and No Right Turn), and
