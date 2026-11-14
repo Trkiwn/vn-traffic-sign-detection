@@ -574,7 +574,7 @@ scripts/
 dataset/
   archive/                        # Downloaded source dataset
   model_ready/                    # Prepared images and annotations
-outputs/                          # Training, evaluation, prediction, and plot outputs
+outputs/                          # Local generated outputs; excluded from Git
 results/
   YOLO11s/
     min_val_loss/                 # Reported run: predictions, metrics, loss history
@@ -588,6 +588,12 @@ requirements.txt
 
 See [requirements.txt](./requirements.txt) for project dependencies. PyTorch
 and torchvision wheels remain platform- and CUDA-specific.
+
+The root `.gitignore` excludes `outputs/`, so files generated there remain
+local and are not included in GitHub commits. This directory currently holds
+large checkpoints and other reproducible outputs (about 5.3 GB in the inspected
+workspace). Committed experiment reports and selected result artifacts are
+stored under `results/` and `docs/` instead.
 
 ### Tests
 
