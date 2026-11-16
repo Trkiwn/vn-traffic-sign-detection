@@ -11,6 +11,7 @@ Final project by Group 5 for the Introduction to Computer Science course
 | Models | RT-DETR R50vd, Faster R-CNN (ResNet-50 FPN v2) and YOLO11s are trained and evaluated |
 | Shared protocol | Same train/validation/test split, 640 x 640 stretched input, no augmentation, 50 epochs, COCO-pretrained weights, minimum validation-loss checkpoint selection, `pycocotools` COCO evaluation (YOLO11s differences are listed in Section 4) |
 | Main result | On the test split, RT-DETR reaches mAP@[.50:.95] 0.757, versus 0.703 for YOLO11s and 0.695 for Faster R-CNN |
+| Speed | On one Tesla T4 at batch size 1, end to end: YOLO11s 19.6 ms (FP32) / 23.2 ms (FP16), RT-DETR 72.4 / 63.4 ms, Faster R-CNN 116.6 / 55.9 ms |
 | How to read it | Scores measure performance on held-out frames from the collected scenes (see Section 6) |
 
 ## 1. Introduction
@@ -18,10 +19,11 @@ Final project by Group 5 for the Introduction to Computer Science course
 This project compares object-detection models on Vietnamese traffic-sign
 images under a shared dataset, training/validation protocol, and COCO
 evaluation. All three pipelines (RT-DETR, Faster R-CNN and YOLO11s) are
-complete. Deployment-oriented measurements (latency, FPS,
-parameter count, model size) are planned for a follow-up stage under
-controlled hardware settings, so that accuracy and speed can be discussed
-together.
+complete. A benchmark script (`scripts/benchmark/`) compares inference speed
+and model size (latency, FPS, parameters, FLOPs, weight size) for all three
+models on one GPU, so that accuracy and cost can be discussed together.
+Edge-device deployment is outside the scope of this project and is listed as
+possible future work.
 
 The project is an exploratory course study of detector behaviour on a public
 dataset. Its findings are intended for model comparison and are not a
@@ -518,6 +520,58 @@ script reproduces the 640 x 640 stretched input and is a demo, not an evaluator.
 It needs the `epoch36.pt` weights, which are not in the repository; without
 `--output` it only prints the detections as JSON.
 
+### Inference speed and model size benchmark
+
+All three models are timed through one harness,
+`scripts/benchmark/benchmark_inference.py`, in a single session on one GPU:
+
+```bash
+python scripts/benchmark/benchmark_inference.py \
+  --rtdetr-checkpoint outputs/rtdetr_r50vd_comparison_50ep/checkpoint-4320 \
+  --rcnn-checkpoint outputs/faster_rcnn_comparison_50ep/best.pt \
+  --yolo-checkpoint /path/to/epoch36.pt \
+  --device cuda:0 --precision both
+
+python scripts/benchmark/plot_accuracy_latency.py
+```
+
+Add `--num-images 5 --warmup 2 --runs 10 --repeats 1` for a quick smoke test
+first. Results are written to `outputs/benchmark/` (`benchmark_results.json` and
+`benchmark_table.md`), and the plot to `outputs/plots/accuracy_vs_latency.png`.
+On a machine with two GPUs, only the device given by `--device` is used.
+
+Protocol:
+
+- **Inputs and batch size.** Batch size 1, the same 640 x 640 stretched
+  preprocessing as in evaluation, and 100 test images (fixed seed) decoded once
+  and cycled through, so that postprocessing sees realistic detection counts.
+- **Timing.** 50 warm-up and 300 timed iterations per configuration, repeated 3
+  times with the model order rotated, with `torch.cuda.synchronize()` around
+  every timed stage. The median and 95th percentile are reported over all timed
+  runs, together with how far the repeat medians differ.
+- **What is timed.** End-to-end latency covers preprocessing, the forward pass,
+  postprocessing at score threshold 0.001, and the copy of the detections to the
+  host in original-image coordinates. Preprocessing, inference and
+  postprocessing are also timed separately. torchvision's Faster R-CNN performs
+  NMS inside its forward pass, so its inference time already includes
+  postprocessing.
+- **Precision.** FP32 and FP16 through `torch.autocast`, the mechanism used in
+  training.
+- **Model-specific settings.** YOLO11s uses Ultralytics' fused inference graph
+  with the NMS settings of the reported evaluation (IoU 0.7, at most 100
+  detections, one class per box; `--yolo-multi-label` changes this).
+  RT-DETR is NMS-free. Faster R-CNN keeps torchvision's NMS at IoU 0.5 and at
+  most 100 detections.
+- **Size and cost.** Parameters and FP32 weight size of the model as trained,
+  GFLOPs from `torch.utils.flop_counter` (convolution and matrix-multiply
+  operations only, so operations such as grid sampling and RoIAlign are not
+  counted and the values are approximate; they are measured on a blank 640 x 640
+  input, so Faster R-CNN's value depends on the number of region proposals), and
+  peak GPU memory allocated by PyTorch (excluding the CUDA context).
+
+The benchmark measures inference cost under PyTorch eager mode on the GPU used.
+It does not cover export formats (ONNX, TensorRT), edge devices or power.
+
 ### Loss visualization and checkpoint selection
 
 RT-DETR and Faster R-CNN use the same plotting script:
@@ -569,12 +623,13 @@ scripts/
     evaluate/                     # Replay and verify archived COCO evaluation
     visualisation/                # Validation-loss plot and image visualization
   preprocessing/                  # Prepare COCO and YOLO dataset files; dataset_audit.ipynb
+  benchmark/                      # Inference speed and model-size benchmark, accuracy-latency plot
   visual_plot/                    # Shared training/validation loss plots
   data/                           # Dataset download/import
 dataset/
   archive/                        # Downloaded source dataset
   model_ready/                    # Prepared images and annotations
-outputs/                          # Local generated outputs; excluded from Git
+outputs/                          # Training, evaluation, prediction, and plot outputs
 results/
   YOLO11s/
     min_val_loss/                 # Reported run: predictions, metrics, loss history
@@ -588,12 +643,6 @@ requirements.txt
 
 See [requirements.txt](./requirements.txt) for project dependencies. PyTorch
 and torchvision wheels remain platform- and CUDA-specific.
-
-The root `.gitignore` excludes `outputs/`, so files generated there remain
-local and are not included in GitHub commits. This directory currently holds
-large checkpoints and other reproducible outputs (about 5.3 GB in the inspected
-workspace). Committed experiment reports and selected result artifacts are
-stored under `results/` and `docs/` instead.
 
 ### Tests
 
@@ -612,7 +661,8 @@ evaluated test images, 2,461 well-formed predictions (638 images have at least
 one; one test image has none above the score floor), and that the earlier pilot
 is preserved. `test_yolo11s_structure.py` checks that the YOLO11s entry points
 exist, that `replay_coco.py` resolves the repository root, and that this README
-names the correct paths.
+names the correct paths. `test_benchmark_core.py` checks the benchmark's
+statistics, timing loop and output files with fake models.
 
 ## 5. Results and evaluation
 
@@ -651,9 +701,48 @@ these two models. AR@1 and AR@10 are available in the evaluation outputs.
 The Faster R-CNN checkpoint used is the validation-selected `best.pt` (epoch
 22). Its loss curve supports choosing this checkpoint over the final one.
 
-Accuracy is one half of a deployment comparison. Statements about real-time
-suitability will be made after latency, FPS, parameter count, and model size
-are measured under the controlled protocol in Section 6.3.
+### Inference speed and model size
+
+Speed and size are measured separately from accuracy, with the benchmark
+described in Section 4, on one Tesla T4 GPU (Kaggle) at batch size 1.
+
+| Model | Precision | Params (M) | Weights (MB) | GFLOPs | Peak GPU mem (MB) | Preprocess (ms) | Inference (ms) | Postprocess (ms) | End-to-end p50 / p95 (ms) | FPS (1/p50) |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| RT-DETR R50vd | FP32 | 42.8 | 172 | 137.7 | 335 | 6.16 | 65.58 | 0.90 | 72.36 / 77.02 | 13.8 |
+| Faster R-CNN | FP32 | 43.5 | 174 | 451.3 | 697 | 12.67 | 101.23† | included | 116.61 / 125.97 | 8.6 |
+| YOLO11s | FP32 | 9.4 | 38 | 21.5 | 114 | 10.39 | 7.96 | 1.22 | 19.60 / 36.13 | 51.0 |
+| RT-DETR R50vd | FP16 | 42.8 | 172 | 137.7 | 315 | 5.56 | 56.41 | 0.89 | 63.37 / 70.60 | 15.8 |
+| Faster R-CNN | FP16 | 43.5 | 174 | 451.3 | 692 | 12.52 | 42.30† | included | 55.86 / 69.21 | 17.9 |
+| YOLO11s | FP16 | 9.4 | 38 | 21.5 | 96 | 10.41 | 11.47 | 1.25 | 23.21 / 39.73 | 43.1 |
+
+Times are medians (p50) and 95th percentiles (p95) over all timed runs; stage
+times are measured with a synchronization after every stage, so they do not add
+up exactly to the end-to-end time. † Faster R-CNN's inference time includes its
+NMS, so its postprocessing column only rescales boxes and copies them to the
+host. FP16 is `torch.autocast`.
+
+Observations (this GPU, PyTorch eager mode, batch size 1):
+
+- YOLO11s is the fastest and smallest model: 19.6 ms (51 FPS) end to end in
+  FP32 and 23.2 ms in FP16, with 9.4 M parameters and 21.5 GFLOPs, against 72.4
+  and 63.4 ms for RT-DETR and 116.6 and 55.9 ms for Faster R-CNN.
+- RT-DETR has the highest test mAP@[.50:.95] (0.757), at about 3.7 times
+  YOLO11s's end-to-end latency in FP32 and 2.7 times in FP16.
+- Faster R-CNN and YOLO11s have similar accuracy (0.695 and 0.703), but Faster
+  R-CNN is about 6 times slower end to end in FP32 and 2.4 times slower in FP16.
+- FP16 through autocast helped the two larger models (RT-DETR 72.4 to 63.4 ms,
+  Faster R-CNN 116.6 to 55.9 ms) but not YOLO11s (19.6 to 23.2 ms), where the
+  per-layer casts add overhead to a small network. The YOLO11s FP16 figures are
+  therefore conservative; converting the weights to half precision would
+  probably be faster.
+- CPU-side preprocessing (resizing full-resolution frames with PIL) is roughly
+  half of YOLO11s's end-to-end time (about 10.4 ms) and would shrink with
+  GPU-side resizing. The p95 latencies likely reflect the mix of image sizes in
+  the 100-image sample.
+
+These numbers describe inference cost on one GPU under PyTorch. They do not by
+themselves establish suitability for real-time or in-vehicle use, and the
+ranking could change with export formats or other hardware.
 
 ## 6. Scope of the results and future work
 
@@ -718,6 +807,21 @@ three models, report how many correspond to genuine unlabelled signs, and report
 annotation-adjusted precision next to the standard metrics. Qualitative
 predictions should be read alongside the provided annotations.
 
+### 6.3 Completing the comparison
+
+| Step | Retraining needed | Purpose |
+|---|---|---|
+| Re-run YOLO11s inference with multi-label NMS (for example through Ultralytics' validation mode with `conf=0.001`, saving COCO-format predictions) and re-score | No (inference only) | Make YOLO11s's detection lists comparable with the other two models |
+| Optional: repeat Faster R-CNN training with normalization layers in evaluation mode during validation, and 2-3 seeds | Yes | Measure run-to-run variance and the effect of the validation-mode and accumulation corrections |
+| Checkpoint selection by validation mAP | Partly | Select by the reporting metric. Faster R-CNN's five-epoch checkpoints can be scored without retraining; RT-DETR keeps only three checkpoints |
+| Optional: benchmark true half-precision weights (`model.half()`) and GPU-side resizing | No | Check how much of YOLO11s's FP16 slowdown and of the preprocessing cost comes from autocast and CPU resizing |
+| Edge-device deployment (ONNX or TensorRT export, embedded hardware, power) | Out of scope | Possible future work; not part of this project |
+| Per-class analysis | No | Per-class AP, ground-truth boxes per size bucket, confusion matrix, including mirror-image pairs and similar-sign groups such as the speed limits and vehicle restrictions; classes with fewer than 10 test boxes flagged as statistically unreliable |
+
+The benchmark describes inference cost on one GPU under PyTorch. It does not
+establish real-time or in-vehicle suitability, which would also depend on the
+target hardware, the export format and accuracy under deployment conditions.
+
 ## 7. Conclusion
 
 This project provides a reproducible pipeline for training and evaluating
@@ -727,9 +831,11 @@ and Faster R-CNN (0.695), whose order depends on the metric; RT-DETR's advantage
 is largest at stricter IoU thresholds. The results are reported together with
 their scope: evaluation is at frame level, the YOLO11s result is retrospective
 and uses a different checkpoint-selection and inference setup, the source
-annotations are incomplete for some images, and the efficiency measurements are
-still to come. The planned clean-test, scene-group, and independent-test
-evaluations will show how well the findings carry over to unseen recordings.
+annotations are incomplete for some images, and the speed measurements describe
+one GPU under PyTorch only. On that GPU, YOLO11s is the fastest model (19.6 ms
+end to end in FP32) and RT-DETR the most accurate, at about 3.7 times YOLO11s's
+latency. The planned clean-test, scene-group, and independent-test evaluations
+will show how well the findings carry over to unseen recordings.
 
 ## 8. References
 
