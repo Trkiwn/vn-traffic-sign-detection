@@ -14,7 +14,7 @@ Usage (repository root):
     python scripts/benchmark/benchmark_inference.py \
         --rtdetr-checkpoint outputs/rtdetr_r50vd_comparison_50ep/checkpoint-4320 \
         --rcnn-checkpoint outputs/faster_rcnn_comparison_50ep/best.pt \
-        --yolo-checkpoint /path/to/epoch36.pt \
+        --yolo-checkpoint outputs/yolo11s/epoch36.pt \
         --device cuda:0 --precision both
 
 Quick smoke test before the full run:
@@ -407,7 +407,8 @@ def parse_args(argv=None):
                    default=ROOT / "outputs" / "rtdetr_r50vd_comparison_50ep" / "checkpoint-4320")
     p.add_argument("--rcnn-checkpoint", type=Path,
                    default=ROOT / "outputs" / "faster_rcnn_comparison_50ep" / "best.pt")
-    p.add_argument("--yolo-checkpoint", type=Path, help="Path to the selected YOLO11s weights (epoch36.pt).")
+    p.add_argument("--yolo-checkpoint", type=Path, default=ROOT / "outputs" / "yolo11s" / "epoch36.pt",
+                   help="Selected YOLO11s weights (default: outputs/yolo11s/epoch36.pt).")
     p.add_argument("--images-dir", type=Path, default=ROOT / "dataset" / "model_ready" / "images" / "test")
     p.add_argument("--num-images", type=int, default=100)
     p.add_argument("--seed", type=int, default=42)
@@ -428,8 +429,8 @@ def parse_args(argv=None):
     args = p.parse_args(argv)
     if args.runs < 1 or args.warmup < 0 or args.repeats < 1 or args.num_images < 1:
         p.error("--runs, --repeats and --num-images must be >= 1 and --warmup >= 0")
-    if "yolo11s" in args.models and args.yolo_checkpoint is None:
-        p.error("--yolo-checkpoint is required when benchmarking yolo11s (the weights are not in the repository)")
+    if "yolo11s" in args.models and not args.yolo_checkpoint.is_file():
+        p.error(f"YOLO11s weights not found: {args.yolo_checkpoint} (pass --yolo-checkpoint, or use --models to skip yolo11s)")
     return args
 
 

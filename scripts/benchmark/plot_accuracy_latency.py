@@ -6,6 +6,7 @@ Reads the output of benchmark_inference.py and the saved COCO test metrics.
 Usage (repository root):
     python scripts/benchmark/plot_accuracy_latency.py
     python scripts/benchmark/plot_accuracy_latency.py --precision fp32
+    python scripts/benchmark/plot_accuracy_latency.py --rtdetr-metrics path/to/test_metrics.json
 """
 from __future__ import annotations
 
@@ -14,25 +15,37 @@ import json
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-METRIC_FILES = {
-    "rtdetr": ROOT / "outputs" / "rtdetr_r50vd_comparison_50ep" / "evaluation" / "test_metrics.json",
-    "faster_rcnn": ROOT / "outputs" / "faster_rcnn_comparison_50ep" / "test_metrics.json",
-    "yolo11s": ROOT / "results" / "YOLO11s" / "min_val_loss" / "test_metrics.json",
+RTDETR_DIR = ROOT / "outputs" / "rtdetr_r50vd_comparison_50ep"
+METRIC_CANDIDATES = {
+    "rtdetr": [RTDETR_DIR / "evaluation" / "test_metrics.json",
+               RTDETR_DIR / "checkpoint-4320" / "evaluation" / "test_metrics.json"],
+    "faster_rcnn": [ROOT / "outputs" / "faster_rcnn_comparison_50ep" / "test_metrics.json"],
+    "yolo11s": [ROOT / "outputs" / "yolo11s" / "min_val_loss" / "test_metrics.json"],
 }
 
 
-def load_points(benchmark_path, precision, metric_files):
+def resolve_metrics(candidates, label):
+    """Return the first existing metrics file, or explain every location tried."""
+    for candidate in candidates:
+        if Path(candidate).is_file():
+            return Path(candidate)
+    tried = "\n  ".join(str(c) for c in candidates)
+    raise FileNotFoundError(
+        f"Test metrics not found for {label}. Looked in:\n  {tried}\n"
+        "Pass the file explicitly with the matching --*-metrics option.")
+
+
+def load_points(benchmark_path, precision, metric_candidates):
     benchmark = json.loads(Path(benchmark_path).read_text(encoding="utf-8"))
     points = []
     for row in benchmark["rows"]:
         if row["precision"] != precision:
             continue
-        metrics_path = Path(metric_files[row["key"]])
-        if not metrics_path.is_file():
-            raise FileNotFoundError(f"Test metrics not found for {row['model']}: {metrics_path}")
+        metrics_path = resolve_metrics(metric_candidates[row["key"]], row["model"])
         metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
         points.append({"label": row["model"], "map": float(metrics["map"]),
-                       "p50": row["e2e_ms"]["p50"], "p95": row["e2e_ms"]["p95"]})
+                       "p50": row["e2e_ms"]["p50"], "p95": row["e2e_ms"]["p95"],
+                       "metrics_file": str(metrics_path)})
     if not points:
         raise ValueError(f"No benchmark rows with precision {precision!r} in {benchmark_path}")
     return points, benchmark
@@ -42,16 +55,22 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--benchmark", type=Path, default=ROOT / "outputs" / "benchmark" / "benchmark_results.json")
     parser.add_argument("--precision", choices=("fp32", "fp16"), default="fp16")
-    parser.add_argument("--rtdetr-metrics", type=Path, default=METRIC_FILES["rtdetr"])
-    parser.add_argument("--rcnn-metrics", type=Path, default=METRIC_FILES["faster_rcnn"])
-    parser.add_argument("--yolo-metrics", type=Path, default=METRIC_FILES["yolo11s"])
-    parser.add_argument("--output", type=Path, default=ROOT / "outputs" / "plots" / "accuracy_vs_latency.png")
+    parser.add_argument("--rtdetr-metrics", type=Path, help="RT-DETR test_metrics.json (overrides the search).")
+    parser.add_argument("--rcnn-metrics", type=Path, help="Faster R-CNN test_metrics.json.")
+    parser.add_argument("--yolo-metrics", type=Path, help="YOLO11s test_metrics.json.")
+    parser.add_argument("--output", type=Path, default=ROOT / "outputs" / "plot" / "accuracy_vs_latency.png")
     args = parser.parse_args()
     if not args.benchmark.is_file():
         parser.error(f"Benchmark results not found: {args.benchmark}")
 
-    metric_files = {"rtdetr": args.rtdetr_metrics, "faster_rcnn": args.rcnn_metrics, "yolo11s": args.yolo_metrics}
-    points, benchmark = load_points(args.benchmark, args.precision, metric_files)
+    candidates = dict(METRIC_CANDIDATES)
+    for key, override in (("rtdetr", args.rtdetr_metrics), ("faster_rcnn", args.rcnn_metrics),
+                          ("yolo11s", args.yolo_metrics)):
+        if override is not None:
+            candidates[key] = [override]
+    points, benchmark = load_points(args.benchmark, args.precision, candidates)
+    for point in points:
+        print(f"{point['label']}: mAP {point['map']:.4f} from {point['metrics_file']}")
 
     import matplotlib.pyplot as plt
 
