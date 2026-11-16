@@ -5,7 +5,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = next(p for p in Path(__file__).resolve().parents
+            if (p / "scripts" / "benchmark" / "benchmark_inference.py").is_file())
 SCRIPT = ROOT / "scripts" / "benchmark" / "benchmark_inference.py"
 
 
