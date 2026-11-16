@@ -12,6 +12,7 @@ Final project by Group 5 for the Introduction to Computer Science course
 | Shared protocol | Same train/validation/test split, 640 x 640 stretched input, no augmentation, 50 epochs, COCO-pretrained weights, minimum validation-loss checkpoint selection, `pycocotools` COCO evaluation (YOLO11s differences are listed in Section 4) |
 | Main result | On the test split, RT-DETR reaches mAP@[.50:.95] 0.757, versus 0.703 for YOLO11s and 0.695 for Faster R-CNN |
 | Speed | On one Tesla T4 at batch size 1, end to end: YOLO11s 19.6 ms (FP32) / 23.2 ms (FP16), RT-DETR 72.4 / 63.4 ms, Faster R-CNN 116.6 / 55.9 ms |
+| Outputs | `outputs/` is not tracked by git; its contents are in the Kaggle dataset [trkiwn-working-repo](https://www.kaggle.com/datasets/kiennt25/trkiwn-working-repo/) |
 | How to read it | Scores measure performance on held-out frames from the collected scenes (see Section 6) |
 
 ## 1. Introduction
@@ -478,13 +479,14 @@ The notebook pins `ultralytics==8.4.189` and `pycocotools==2.0.11`.
 `requirements.txt` documents the Kaggle environment and is not a bit-for-bit
 record of the Colab runtime.
 
-The repository holds the saved JSON evidence, not the model weights. The
+The saved JSON evidence is under `outputs/yolo11s/`. The selected weights are
+expected at `outputs/yolo11s/epoch36.pt`, with SHA-256
+`05cf921fffd4c46df7b18ea8958c84e29bc228207a65590958c9d16cee42544c`; the
 50-epoch checkpoint series is kept on the run owner's Google Drive
-(`VGU_TrafficSign_Project/yolo11s_colab_runs/yolo11s_colab_pilot_01/`). The
-selected checkpoint is `training/weights/epoch36.pt`, with SHA-256
-`05cf921fffd4c46df7b18ea8958c84e29bc228207a65590958c9d16cee42544c`. The
-methodology, results and limitations are written up in
-[docs/YOLO11s_EXPERIMENT_REPORT.md](docs/YOLO11s_EXPERIMENT_REPORT.md).
+(`VGU_TrafficSign_Project/yolo11s_colab_runs/yolo11s_colab_pilot_01/`), where
+the file is `training/weights/epoch36.pt`. The methodology, results and
+limitations are written up in
+[outputs/yolo11s/docs/YOLO11s_EXPERIMENT_REPORT.md](outputs/yolo11s/docs/YOLO11s_EXPERIMENT_REPORT.md).
 
 #### Evaluation
 
@@ -497,7 +499,7 @@ python scripts/YOLO11s/evaluate/replay_coco.py --split test
 ```
 
 The script recomputes the COCO metrics from
-`results/YOLO11s/min_val_loss/test_predictions.json` and checks them against the
+`outputs/yolo11s/min_val_loss/test_predictions.json` and checks them against the
 recorded `test_metrics.json` (tolerance 1e-8). Adding `--track max_val_ap_pilot`
 replays the earlier pilot instead; the pilot metrics must not be substituted for
 the minimum-validation-loss results.
@@ -509,7 +511,7 @@ python scripts/YOLO11s/visualisation/plot_val_loss.py
 
 python scripts/YOLO11s/visualisation/visualise_yolo11s.py \
   --image path/to/image.jpg \
-  --checkpoint /path/to/epoch36.pt \
+  --checkpoint outputs/yolo11s/epoch36.pt \
   --threshold 0.5 \
   --output outputs/predictions/yolo11s/image_detected.png
 ```
@@ -517,8 +519,8 @@ python scripts/YOLO11s/visualisation/visualise_yolo11s.py \
 The YOLO11s plot shows validation loss only, because validation was switched off
 during training and the loss history was computed afterwards. The visualization
 script reproduces the 640 x 640 stretched input and is a demo, not an evaluator.
-It needs the `epoch36.pt` weights, which are not in the repository; without
-`--output` it only prints the detections as JSON.
+It needs the `epoch36.pt` weights (default location `outputs/yolo11s/epoch36.pt`);
+without `--output` it only prints the detections as JSON.
 
 ### Inference speed and model size benchmark
 
@@ -529,7 +531,7 @@ All three models are timed through one harness,
 python scripts/benchmark/benchmark_inference.py \
   --rtdetr-checkpoint outputs/rtdetr_r50vd_comparison_50ep/checkpoint-4320 \
   --rcnn-checkpoint outputs/faster_rcnn_comparison_50ep/best.pt \
-  --yolo-checkpoint /path/to/epoch36.pt \
+  --yolo-checkpoint outputs/yolo11s/epoch36.pt \
   --device cuda:0 --precision both
 
 python scripts/benchmark/plot_accuracy_latency.py
@@ -537,7 +539,7 @@ python scripts/benchmark/plot_accuracy_latency.py
 
 Add `--num-images 5 --warmup 2 --runs 10 --repeats 1` for a quick smoke test
 first. Results are written to `outputs/benchmark/` (`benchmark_results.json` and
-`benchmark_table.md`), and the plot to `outputs/plots/accuracy_vs_latency.png`.
+`benchmark_table.md`), and the plot to `outputs/plot/accuracy_vs_latency.png`.
 On a machine with two GPUs, only the device given by `--device` is used.
 
 Protocol:
@@ -580,12 +582,12 @@ RT-DETR and Faster R-CNN use the same plotting script:
 python scripts/visual_plot/plot_losses.py \
   --output-dir outputs/rtdetr_r50vd_comparison_50ep \
   --model-name rtdetr \
-  --output outputs/plots/rtdetr_full_training_loss.png
+  --output outputs/plot/rtdetr_full_training_loss.png
 
 python scripts/visual_plot/plot_losses.py \
   --output-dir outputs/faster_rcnn_comparison_50ep \
   --model-name faster_rcnn \
-  --output outputs/plots/faster_rcnn_full_training_loss.png
+  --output outputs/plot/faster_rcnn_full_training_loss.png
 ```
 
 The script reads RT-DETR `trainer_state.json` or Faster R-CNN
@@ -622,6 +624,7 @@ scripts/
     models/                       # Colab notebook: training, selection and test evaluation
     evaluate/                     # Replay and verify archived COCO evaluation
     visualisation/                # Validation-loss plot and image visualization
+    tests/                        # YOLO11s artifact, repository-structure and benchmark tests
   preprocessing/                  # Prepare COCO and YOLO dataset files; dataset_audit.ipynb
   benchmark/                      # Inference speed and model-size benchmark, accuracy-latency plot
   visual_plot/                    # Shared training/validation loss plots
@@ -629,31 +632,40 @@ scripts/
 dataset/
   archive/                        # Downloaded source dataset
   model_ready/                    # Prepared images and annotations
-outputs/                          # Training, evaluation, prediction, and plot outputs
-results/
-  YOLO11s/
+outputs/
+  rtdetr_r50vd_comparison_50ep/   # RT-DETR training, checkpoints and evaluation
+  faster_rcnn_comparison_50ep/    # Faster R-CNN training, checkpoints and evaluation
+  yolo11s/
     min_val_loss/                 # Reported run: predictions, metrics, loss history
     max_val_ap_pilot/             # Earlier pilot (checkpoint chosen by validation AP)
+    docs/                         # YOLO11s_EXPERIMENT_REPORT.md (methodology, results, limitations)
     summary.json                  # Selection and result summary for the YOLO11s run
-docs/
-  YOLO11s_EXPERIMENT_REPORT.md    # YOLO11s methodology, results and limitations
-tests/                            # YOLO11s artifact and repository-structure tests
+    epoch36.pt                    # Selected YOLO11s weights
+  benchmark/                      # Speed and model-size benchmark results
+  plot/                           # Loss and accuracy-latency plots
+  predictions/                    # Single-image demo outputs
 requirements.txt
 ```
+
+The `outputs/` folder is not tracked by git because it holds checkpoints, predictions and
+other large files. To see the outputs, use the Kaggle dataset [trkiwn-working-repo](https://www.kaggle.com/datasets/kiennt25/trkiwn-working-repo/),
+which serves as the online working repository alongside GitHub.
 
 See [requirements.txt](./requirements.txt) for project dependencies. PyTorch
 and torchvision wheels remain platform- and CUDA-specific.
 
 ### Tests
 
-The `tests/` folder checks the archived YOLO11s evidence and the repository
-layout. From the repository root:
+The `scripts/YOLO11s/tests/` folder checks the archived YOLO11s evidence and the
+repository layout. From the repository root:
 
 ```bash
-python -m unittest discover -s tests -v
+python -m unittest discover -s scripts/YOLO11s/tests -v
 ```
 
-The tests use only the standard library and need no GPU or weights.
+The tests use only the standard library and need no GPU or weights. The
+artifact tests read the archived YOLO11s files in `outputs/yolo11s/`, so download
+`outputs/` from the Kaggle dataset first.
 `test_yolo11s_artifacts.py` verifies the provenance of the YOLO11s result files:
 50 consecutive epochs, 255 validation images in 32 batches per epoch,
 consistent checkpoint hashes, the minimum validation loss at epoch 37, 639
