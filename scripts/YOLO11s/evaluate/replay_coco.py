@@ -16,7 +16,7 @@ from pathlib import Path
 from collections import Counter
 
 ROOT = Path(__file__).resolve().parents[3]
-ARTIFACTS = ROOT / "results" / "YOLO11s" / "min_val_loss"
+ARTIFACTS = ROOT / "outputs" / "yolo11s" / "min_val_loss"
 ANN = ROOT / "dataset" / "model_ready" / "annotations"
 METRIC_NAMES = (
     "map", "map_50", "map_75", "map_small", "map_medium", "map_large",
