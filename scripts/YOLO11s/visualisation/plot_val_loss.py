@@ -9,11 +9,13 @@ import argparse
 import json
 from pathlib import Path
 
+ROOT = Path(__file__).resolve().parents[3]
+
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--history', type=Path, default=Path('results/YOLO11s/min_val_loss/val_loss_history.json'))
-    parser.add_argument('--output', type=Path, default=Path('outputs/plots/yolo11s_validation_loss.png'))
+    parser.add_argument('--history', type=Path, default=ROOT / 'outputs' / 'yolo11s' / 'min_val_loss' / 'val_loss_history.json')
+    parser.add_argument('--output', type=Path, default=ROOT / 'outputs' / 'plot' / 'yolo11s_validation_loss.png')
     args = parser.parse_args()
     if not args.history.is_file():
         parser.error(f'Validation loss history not found: {args.history}')

@@ -4,9 +4,10 @@ import unittest
 from pathlib import Path
 from collections import Counter
 
-BASE=Path(__file__).resolve().parents[1]
-MAIN=BASE/'results'/'YOLO11s'/'min_val_loss'
-OLD=BASE/'results'/'YOLO11s'/'max_val_ap_pilot'
+ROOT=Path(__file__).resolve().parents[3]
+BASE=ROOT / "outputs" / "yolo11s"
+MAIN=BASE / "min_val_loss"
+OLD=BASE / "max_val_ap_pilot"
 
 def read(path):
     return json.loads(path.read_text(encoding='utf-8'))

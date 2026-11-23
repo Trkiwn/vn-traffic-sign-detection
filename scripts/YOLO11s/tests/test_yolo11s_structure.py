@@ -2,7 +2,7 @@ from pathlib import Path
 import unittest
 import importlib.util
 
-ROOT=Path(__file__).resolve().parents[1]
+ROOT=Path(__file__).resolve().parents[3]
 YOLO=ROOT / 'scripts' / 'YOLO11s'
 
 class TestYOLO11sLayout(unittest.TestCase):
@@ -22,7 +22,7 @@ class TestYOLO11sLayout(unittest.TestCase):
         mod=importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
         self.assertEqual(mod.ROOT, ROOT)
-        self.assertTrue(mod.ARTIFACTS.joinpath('test_metrics.json').is_file())
+        self.assertEqual(mod.ARTIFACTS, ROOT / 'outputs' / 'yolo11s' / 'min_val_loss')
     def test_readme_matches_actual_paths(self):
         s=(ROOT/'README.md').read_text(encoding='utf8')
         for file in (
