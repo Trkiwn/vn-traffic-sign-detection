@@ -17,10 +17,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 RTDETR_DIR = ROOT / "outputs" / "rtdetr_r50vd_comparison_50ep"
 METRIC_CANDIDATES = {
-    "rtdetr": [RTDETR_DIR / "evaluation" / "test_metrics.json",
-               RTDETR_DIR / "checkpoint-4320" / "evaluation" / "test_metrics.json"],
+    "rtdetr": [RTDETR_DIR / "checkpoint-14400" / "evaluation" / "test_metrics.json",
+               RTDETR_DIR / "checkpoint-4320" / "evaluation" / "test_metrics.json",
+               RTDETR_DIR / "evaluation" / "test_metrics.json"],
     "faster_rcnn": [ROOT / "outputs" / "faster_rcnn_comparison_50ep" / "test_metrics.json"],
-    "yolo11s": [ROOT / "outputs" / "yolo11s" / "min_val_loss" / "test_metrics.json"],
+    "yolo11s": [ROOT / "outputs" / "yolo11s" / "max_val_ap_pilot" / "test_metrics.json"],
 }
 
 
